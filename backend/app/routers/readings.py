@@ -9,6 +9,8 @@ from app.models.user import User
 from app.models.reading import BPReading
 from app.schemas.reading import BPReadingCreate, BPReadingOut
 from app.core.bp_classification import classify_bp
+from app.core.trend_analysis import compute_trend
+from app.schemas.trend import TrendSummary
 
 router = APIRouter(prefix="/readings", tags=["Blood Pressure Readings"])
 
@@ -70,3 +72,27 @@ def get_patient_readings(
         db.query(BPReading).filter(BPReading.patient_id == patient_id).order_by(BPReading.recorded_at.desc()).all()
     )
     return [_to_out(r) for r in readings]
+
+@router.get("/me/trend", response_model=TrendSummary)
+def get_my_trend(
+    period_days: int = 7,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != "patient":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only patients can view their own trend")
+
+    return compute_trend(db, current_user.user_id, period_days)
+
+
+@router.get("/patient/{patient_id}/trend", response_model=TrendSummary)
+def get_patient_trend(
+    patient_id: uuid.UUID,
+    period_days: int = 7,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != "clinician":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only clinicians can view patient trends")
+
+    return compute_trend(db, patient_id, period_days)
