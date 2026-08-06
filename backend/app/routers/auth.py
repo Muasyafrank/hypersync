@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
@@ -14,13 +15,15 @@ router = APIRouter(prefix = "/auth", tags = ["Authentication"])
 def register(payload:UserRegister,db:Session = Depends(get_db)):
     existing = db.query(User).filter(User.email == payload.email).first()
     if existing:
-        raise HTTPException(status_code = status.HTTP_400_BAD_REQUEST, detail = " Email already registered")
+        raise HTTPException(status_code = status.HTTP_400_BAD_REQUEST, detail = " Email already registered") 
+
+    role = payload.role if payload.role else "patient"
 
     user = User(
         full_name = payload.full_name,
         email = payload.email,
         password_hash = hash_password(payload.password),
-        role = payload.role
+        role = role
     )
     db.add(user)
     db.flush()
@@ -47,7 +50,16 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db:Session = Depends
                             headers = {"WWW-Authenticate": "Bearer"}
                             )
     access_token = create_access_token(data = {"sub": str(user.user_id), "role": user.role.value})
-    return  Token(access_token = access_token, token_type = "bearer")
+    # return  Token(access_token = access_token, token_type = "bearer", user_id = "Francis", role = "Test")
+    return JSONResponse(
+        status_code= 200,
+        content={
+            "access_token":access_token,
+            "token_type":"bearer",
+            "user_id": str(user.user_id),
+            "role":user.role.value
+        }
+    )
 
 @router.get("/me", response_model = UserOut)
 def read_current_user(current_user:User = Depends(get_current_user)):

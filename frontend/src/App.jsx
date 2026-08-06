@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import ReadingsHistory from './pages/ReadingsHistory';
 import LogReading from './pages/LogReading';
 import Trend from './pages/Trend';
+import ClinicianDashboard from './pages/Clinician'
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -18,6 +19,7 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/clinician" element={<ClinicianDashboard />} />
       <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
       <Route path="/readings" element={<PrivateRoute><ReadingsHistory /></PrivateRoute>} />
       <Route path="/readings/new" element={<PrivateRoute><LogReading /></PrivateRoute>} />

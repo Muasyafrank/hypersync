@@ -23,10 +23,21 @@ export default function Login() {
 
     try {
       const tokenData = await loginUser(form);
+      console.log("data", tokenData);
+
       localStorage.setItem('access_token', tokenData.access_token);
+      localStorage.setItem('user_id', tokenData.user_id);
+      localStorage.setItem('role', tokenData.role);
+      let token = localStorage.getItem("access_token");
       const userData = await getCurrentUser();
       login(tokenData.access_token, userData);
-      navigate('/dashboard');
+      if (tokenData.role === 'clinician') {
+        navigate('/clinician');
+      } else {
+        navigate('/dashboard');
+
+      }
+
     } catch (err) {
       setError('Incorrect email or password.');
     } finally {
