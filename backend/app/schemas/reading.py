@@ -8,6 +8,7 @@ class BPReadingCreate(BaseModel):
     heart_rate: int  | None = Field(default=None, gt=0, lt=250)
     recorded_at: datetime | None = None
     source:str = "manual"
+    notes:str | None
 
     @field_validator("diastolic")
     @classmethod
@@ -27,6 +28,7 @@ class BPReadingOut(BaseModel):
     recorded_at: datetime
     source: str
     status: str
+    notes: str
 
 
     class Config:

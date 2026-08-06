@@ -16,5 +16,6 @@ class BPReading(Base):
     recorded_at = Column(DateTime(timezone = True), nullable=False,server_default=func.now())
     source = Column(String,nullable=False,default="manual")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    notes = Column(String, nullable=True)
 
     patient = relationship("User", backref="bp_readings")

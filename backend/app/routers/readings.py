@@ -23,6 +23,7 @@ def _to_out(reading: BPReading) -> BPReadingOut:
         heart_rate=reading.heart_rate,
         recorded_at=reading.recorded_at,
         source=reading.source,
+        notes= reading.notes or " ",
         status=classify_bp(reading.systolic, reading.diastolic),
     )
 
@@ -41,6 +42,7 @@ def create_reading(
         heart_rate=payload.heart_rate,
         recorded_at=payload.recorded_at or None,
         source=payload.source,
+        notes= payload.notes
     )
     db.add(reading)
     db.commit()
@@ -96,3 +98,17 @@ def get_patient_trend(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only clinicians can view patient trends")
 
     return compute_trend(db, patient_id, period_days)
+
+@router.delete("/{reading_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_reading(
+    reading_id:uuid.UUID,
+    db:Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+   reading = db.query(BPReading).filter(BPReading.reading_id == reading_id).first()
+   if not reading:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reading not found")
+   if reading.patient_id != current_user.user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not your reading")
+   db.delete(reading)
+   db.commit() 
