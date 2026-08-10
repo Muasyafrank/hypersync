@@ -1,12 +1,15 @@
 import { useState } from 'react';
-import { Container, Card, Form, Button, Alert } from 'react-bootstrap';
+import { Container, Card, Form, Button, Alert, Toast } from 'react-bootstrap';
 import { useNavigate, Link } from 'react-router-dom';
 import { loginUser, getCurrentUser } from '../api/auth';
 import { useAuth } from '../context/AuthContext';
+import { setTokens} from '../api/tokenStorage';
+import { useToast } from '../context/ToastContext';
 
 export default function Login() {
   const navigate = useNavigate();
   const { login } = useAuth();
+  const toast = useToast();
 
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
@@ -17,33 +20,24 @@ export default function Login() {
   }
 
   async function handleSubmit(e) {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
+  e.preventDefault();
+  setError('');
+  setLoading(true);
 
-    try {
-      const tokenData = await loginUser(form);
-      console.log("data", tokenData);
-
-      localStorage.setItem('access_token', tokenData.access_token);
-      localStorage.setItem('user_id', tokenData.user_id);
-      localStorage.setItem('role', tokenData.role);
-      let token = localStorage.getItem("access_token");
-      const userData = await getCurrentUser();
-      login(tokenData.access_token, userData);
-      if (tokenData.role === 'clinician') {
-        navigate('/clinician');
-      } else {
-        navigate('/dashboard');
-
-      }
-
-    } catch (err) {
-      setError('Incorrect email or password.');
-    } finally {
-      setLoading(false);
-    }
+  try {
+    const tokenData = await loginUser(form);
+    setTokens(tokenData);
+    const userData = await getCurrentUser();
+    login(tokenData, userData);
+    toast.success(`Welcome back, ${userData.full_name}!`);
+    navigate(userData.role === 'clinician' ? '/clinician' : '/dashboard');
+  } catch (err) {
+    toast.error('Incorrect email or password.');
+    setError('Incorrect email or password.');
+  } finally {
+    setLoading(false);
   }
+}
 
   return (
     <div className="hs-auth-wrapper d-flex align-items-center justify-content-center">

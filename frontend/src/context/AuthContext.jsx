@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { getCurrentUser } from '../api/auth';
+import { getAccessToken,getRefreshToken,setTokens,clearTokens} from '../api/tokenStorage'
 
 const AuthContext = createContext(null);
 
@@ -8,7 +9,7 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token');
+    const token = getAccessToken();
     if (!token) {
       setLoading(false);
       return;
@@ -16,22 +17,28 @@ export function AuthProvider({ children }) {
     getCurrentUser()
       .then(setUser)
       .catch(() => {
-        localStorage.removeItem('access_token');
+        clearTokens();
       })
       .finally(() => setLoading(false));
   }, []);
 
-  function login(token, userData) {
-    localStorage.setItem('access_token', token);
+  function login(tokenPair, userData) {
+    setTokens(tokenPair);
     setUser(userData);
   }
 
-  function logout() {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('user_id');
-    localStorage.removeItem('role');
+  async  function logout() {
+    const refreshToken = getRefreshToken();
+    try{
+      if(refreshToken){
+        await logoutUser(refreshToken);
+      }
+    }catch{
 
-    setUser(null);
+    }finally{
+      clearTokens();
+      setUser(null);
+    }
   }
 
   return (

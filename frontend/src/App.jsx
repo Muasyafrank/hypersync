@@ -1,17 +1,23 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ToastProvider } from './context/ToastContext';
+import { ConfirmProvider } from './context/ConfirmContext';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import ReadingsHistory from './pages/ReadingsHistory';
 import LogReading from './pages/LogReading';
 import Trend from './pages/Trend';
-import ClinicianDashboard from './pages/Clinician'
+import ClinicianDashboard from './pages/Clinician';
 
-function PrivateRoute({ children }) {
+function PrivateRoute({ children, allowedRoles }) {
   const { user, loading } = useAuth();
   if (loading) return null;
-  return user ? children : <Navigate to="/login" replace />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (allowedRoles && !allowedRoles.includes(user.role)) {
+    return <Navigate to={user.role === 'clinician' ? '/clinician' : '/dashboard'} replace />;
+  }
+  return children;
 }
 
 function AppRoutes() {
@@ -19,11 +25,11 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
-      <Route path="/clinician" element={<ClinicianDashboard />} />
-      <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-      <Route path="/readings" element={<PrivateRoute><ReadingsHistory /></PrivateRoute>} />
-      <Route path="/readings/new" element={<PrivateRoute><LogReading /></PrivateRoute>} />
-      <Route path="/trend" element={<PrivateRoute><Trend /></PrivateRoute>} />
+      <Route path="/clinician" element={<PrivateRoute allowedRoles={['clinician']}><ClinicianDashboard /></PrivateRoute>} />
+      <Route path="/dashboard" element={<PrivateRoute allowedRoles={['patient']}><Dashboard /></PrivateRoute>} />
+      <Route path="/readings" element={<PrivateRoute allowedRoles={['patient']}><ReadingsHistory /></PrivateRoute>} />
+      <Route path="/readings/new" element={<PrivateRoute allowedRoles={['patient']}><LogReading /></PrivateRoute>} />
+      <Route path="/trend" element={<PrivateRoute allowedRoles={['patient']}><Trend /></PrivateRoute>} />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
@@ -31,10 +37,14 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
-    </AuthProvider>
+    <ToastProvider>
+      <ConfirmProvider>
+        <AuthProvider>
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
+        </AuthProvider>
+      </ConfirmProvider>
+    </ToastProvider>
   );
 }

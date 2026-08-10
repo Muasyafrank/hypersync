@@ -3,6 +3,7 @@ import { Container, Card, Form, Button, Alert, Row, Col } from 'react-bootstrap'
 import { useNavigate, Link } from 'react-router-dom';
 import { registerUser, loginUser, getCurrentUser } from '../api/auth';
 import { useAuth } from '../context/AuthContext';
+import { setTokens } from '../api/tokenStorage';
 
 export default function Register() {
   const navigate = useNavigate();
@@ -43,10 +44,10 @@ export default function Register() {
       await registerUser(payload);
 
       const tokenData = await loginUser({ email: form.email, password: form.password });
-      localStorage.setItem('access_token', tokenData.access_token);
+      setTokens(tokenData);
       const userData = await getCurrentUser();
-      login(tokenData.access_token, userData);
-      navigate('/dashboard');
+      login(tokenData, userData);
+      navigate(userData.role === 'clinician' ? '/clinician' : '/dashboard');
     } catch (err) {
       const detail = err.response?.data?.detail;
       setError(typeof detail === 'string' ? detail : 'Registration failed. Please check your details.');

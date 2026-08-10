@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime, timedelta, timezone
 from passlib.context import CryptContext
 from jose import jwt, JWTError
@@ -11,15 +12,21 @@ def hash_password(password: str) -> str:
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
-def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
-    to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + (
-        expires_delta or timedelta(minutes = settings.access_token_expire_minutes)
-    )
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, settings.secret_key, algorithm = settings.algorithm)
+def _create_token(data:dict,expires_delta:timedelta,token_type: str) -> tuple[str, str, datetime]:
+    jti = str(uuid.uuid4())
+    expire = datetime.now(timezone.utc) + expires_delta
+    to_encode = {**data, "exp":expire,"jti":jti,"type":token_type}
+    token = jwt.encode(to_encode,settings.secret_key,algorithm=settings.algorithm)
+    return token, jti, expire
 
-def decode_access_token(token: str) -> dict | None:
+def create_access_token(data:dict) -> tuple[str,str,datetime]:
+    return _create_token(data,timedelta(minutes=settings.access_token_expire_minutes),"access")
+
+def create_refresh_token(data:dict) -> tuple[str,str,datetime]:
+    return _create_token(data,timedelta(days=settings.refresh_token_expire_days),"refresh")
+
+
+def decode_token(token: str) -> dict | None:
     try:
         return jwt.decode(token,settings.secret_key, algorithms = [settings.algorithm])
     except JWTError:

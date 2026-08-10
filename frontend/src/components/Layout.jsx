@@ -2,15 +2,26 @@ import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { Heart, LayoutGrid, LineChart, Activity, Bell, LogOut, Menu, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useConfirm} from '../context/ConfirmContext'
 
 export default function Layout({ children }) {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const confirm = useConfirm();
 
-    function handleLogout() {
-        logout();
-        navigate('/login');
+    async function handleLogout() {
+        const confirmed = await confirm({
+            title: 'Log out?',
+            message: "You'll need to log back in to access your dashboard.",
+            confirmLabel: 'Log out',
+            cancelLabel: 'Stay logged in',
+            variant: 'primary',
+        });
+        if (confirmed){
+            await logout();
+            navigate('/login')
+        }
     }
 
     function closeSidebar() {
@@ -18,7 +29,7 @@ export default function Layout({ children }) {
     }
 
     const initial = user?.full_name?.charAt(0)?.toUpperCase() || '?';
-    const role = localStorage.getItem("role")
+    const role = user?.role;
 
     return (
         <div className="hs-app-shell" style={{ backgroundColor: 'var(--hs-bg)' }}>

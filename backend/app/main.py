@@ -1,11 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import auth,readings
+from app.routers import auth,readings,users
 
 
 app = FastAPI(title = "HyperSync API")
 app.include_router(auth.router)
 app.include_router(readings.router)
+app.include_router(users.router)
 
 app.add_middleware(
     CORSMiddleware,
