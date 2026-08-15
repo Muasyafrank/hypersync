@@ -9,7 +9,7 @@ from app.core.security import hash_password, verify_password, create_access_toke
 from app.core.deps import get_current_user, oauth2_scheme
 from app.models.user import User, PatientProfile
 from app.models.token import RefreshToken, BlacklistedToken
-from app.schemas.user import UserRegister, UserOut
+from app.schemas.user import UserRegister, UserOut,UserRole
 from app.schemas.auth import TokenPair, AccessTokenOnly, RefreshRequest
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -39,18 +39,16 @@ def register(payload: UserRegister, db: Session = Depends(get_db)):
         full_name=payload.full_name,
         email=payload.email,
         password_hash=hash_password(payload.password),
-        role=payload.role,
+        role=UserRole.patient,
     )
     db.add(user)
     db.flush()
 
-    if payload.role == "patient":
-        db.add(PatientProfile(user_id=user.user_id, date_of_birth=payload.date_of_birth, sex=payload.sex))
+    db.add(PatientProfile(user_id=user.user_id, date_of_birth=payload.date_of_birth, sex=payload.sex))
 
     db.commit()
     db.refresh(user)
     return user
-
 
 @router.post("/login", response_model=TokenPair)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):

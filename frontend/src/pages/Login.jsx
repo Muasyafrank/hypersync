@@ -3,7 +3,7 @@ import { Container, Card, Form, Button, Alert, Toast } from 'react-bootstrap';
 import { useNavigate, Link } from 'react-router-dom';
 import { loginUser, getCurrentUser } from '../api/auth';
 import { useAuth } from '../context/AuthContext';
-import { setTokens} from '../api/tokenStorage';
+import { setTokens } from '../api/tokenStorage';
 import { useToast } from '../context/ToastContext';
 
 export default function Login() {
@@ -18,26 +18,31 @@ export default function Login() {
   function handleChange(e) {
     setForm({ ...form, [e.target.name]: e.target.value });
   }
+  function roleHome(role) {
+    if (role === 'admin') return '/admin';
+    if (role === 'clinician') return '/clinician';
+    return '/dashboard';
+  }
 
   async function handleSubmit(e) {
-  e.preventDefault();
-  setError('');
-  setLoading(true);
+    e.preventDefault();
+    setError('');
+    setLoading(true);
 
-  try {
-    const tokenData = await loginUser(form);
-    setTokens(tokenData);
-    const userData = await getCurrentUser();
-    login(tokenData, userData);
-    toast.success(`Welcome back, ${userData.full_name}!`);
-    navigate(userData.role === 'clinician' ? '/clinician' : '/dashboard');
-  } catch (err) {
-    toast.error('Incorrect email or password.');
-    setError('Incorrect email or password.');
-  } finally {
-    setLoading(false);
+    try {
+      const tokenData = await loginUser(form);
+      setTokens(tokenData);
+      const userData = await getCurrentUser();
+      login(tokenData, userData);
+      toast.success(`Welcome back, ${userData.full_name}!`);
+      navigate(roleHome(userData.role))
+    } catch (err) {
+      toast.error('Incorrect email or password.');
+      setError('Incorrect email or password.');
+    } finally {
+      setLoading(false);
+    }
   }
-}
 
   return (
     <div className="hs-auth-wrapper d-flex align-items-center justify-content-center">

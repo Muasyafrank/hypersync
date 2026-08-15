@@ -10,6 +10,7 @@ from app.core.database import Base
 class UserRole(str,enum.Enum):
     patient = "patient"
     clinician = "clinician"
+    admin = "admin"
 
 class SexEnum(str, enum.Enum):
     male = "Male"

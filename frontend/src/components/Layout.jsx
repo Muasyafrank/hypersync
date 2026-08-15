@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Heart, LayoutGrid, LineChart, Activity, Bell, LogOut, Menu, X } from 'lucide-react';
+import { Heart, LayoutGrid, LineChart, Activity, Bell, LogOut, Menu, X, Users, UserCog } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { useConfirm} from '../context/ConfirmContext'
+import { useConfirm } from '../context/ConfirmContext'
 
 export default function Layout({ children }) {
     const { user, logout } = useAuth();
@@ -18,7 +18,7 @@ export default function Layout({ children }) {
             cancelLabel: 'Stay logged in',
             variant: 'primary',
         });
-        if (confirmed){
+        if (confirmed) {
             await logout();
             navigate('/login')
         }
@@ -66,7 +66,7 @@ export default function Layout({ children }) {
                 </div>
 
                 <nav className="hs-sidebar-nav">
-                    <NavLink to="/dashboard" onClick={closeSidebar} className={({ isActive }) => `hs-sidebar-link${isActive ? ' active' : ''}`}>
+                    <NavLink to={role === 'clinician' ? '/clinician' : role === 'admin' ? '/admin' : '/dashboard'} onClick={closeSidebar} className={({ isActive }) => `hs-sidebar-link${isActive ? ' active' : ''}`}>
                         <LayoutGrid size={18} /> Dashboard
                     </NavLink>
                     {role === 'patient' && (
@@ -82,16 +82,22 @@ export default function Layout({ children }) {
                             </NavLink>
                         </>
                     )}
-                    <NavLink to="/alerts" onClick={closeSidebar} className={({ isActive }) => `hs-sidebar-link${isActive ? ' active' : ''}`}>
-                        <Bell size={18} /> Alerts
-                    </NavLink>
 
                     {role === 'clinician' && (
-                        <NavLink to="/alerts" onClick={closeSidebar} className={({ isActive }) => `hs-sidebar-link${isActive ? ' active' : ''}`}>
-                            <Bell size={18} /> Clinician
+                        <NavLink to="/clinician" onClick={closeSidebar} className={({ isActive }) => `hs-sidebar-link${isActive ? ' active' : ''}`}>
+                            <Users size={18} /> Patients
                         </NavLink>
                     )}
 
+                    {role === 'admin' && (
+                        <NavLink to="/admin" onClick={closeSidebar} className={({ isActive }) => `hs-sidebar-link${isActive ? ' active' : ''}`}>
+                            <UserCog size={18} /> Admin
+                        </NavLink>
+                    )}
+
+                    <NavLink to="/alerts" onClick={closeSidebar} className={({ isActive }) => `hs-sidebar-link${isActive ? ' active' : ''}`}>
+                        <Bell size={18} /> Alerts
+                    </NavLink>
                 </nav>
 
                 <div className="hs-sidebar-footer">

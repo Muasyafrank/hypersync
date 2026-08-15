@@ -7,7 +7,7 @@ class UserRegister(BaseModel):
     full_name: str 
     email: EmailStr
     password: str = Field(min_length = 8)
-    role: UserRole
+    # role: UserRole
     date_of_birth: date | None = None
     sex: SexEnum  | None = None
 
@@ -24,4 +24,10 @@ class UserOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ClinicianCreate(BaseModel):
+    full_name:str
+    email: EmailStr
+    password: str = Field(min_length=8)
         

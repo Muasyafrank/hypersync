@@ -3,17 +3,18 @@ import { Container, Card, Form, Button, Alert, Row, Col } from 'react-bootstrap'
 import { useNavigate, Link } from 'react-router-dom';
 import { registerUser, loginUser, getCurrentUser } from '../api/auth';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { setTokens } from '../api/tokenStorage';
 
 export default function Register() {
   const navigate = useNavigate();
   const { login } = useAuth();
+  const toast = useToast();
 
   const [form, setForm] = useState({
     full_name: '',
     email: '',
     password: '',
-    role: 'patient',
     date_of_birth: '',
     sex: '',
   });
@@ -34,11 +35,8 @@ export default function Register() {
         full_name: form.full_name,
         email: form.email,
         password: form.password,
-        role: form.role,
-        ...(form.role === 'patient' && {
-          date_of_birth: form.date_of_birth || null,
-          sex: form.sex || null,
-        }),
+        date_of_birth: form.date_of_birth || null,
+        sex: form.sex || null,
       };
 
       await registerUser(payload);
@@ -47,10 +45,13 @@ export default function Register() {
       setTokens(tokenData);
       const userData = await getCurrentUser();
       login(tokenData, userData);
-      navigate(userData.role === 'clinician' ? '/clinician' : '/dashboard');
+      toast.success('Account created successfully!');
+      navigate('/dashboard');
     } catch (err) {
       const detail = err.response?.data?.detail;
-      setError(typeof detail === 'string' ? detail : 'Registration failed. Please check your details.');
+      const message = typeof detail === 'string' ? detail : 'Registration failed. Please check your details.';
+      toast.error(message);
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -107,36 +108,26 @@ export default function Register() {
                 <Form.Text className="text-muted">At least 8 characters.</Form.Text>
               </Form.Group>
 
-              <Form.Group className="mb-3">
-                <Form.Label className="hs-form-label">I am a...</Form.Label>
-                <Form.Select name="role" value={form.role} onChange={handleChange}>
-                  <option value="patient">Patient</option>
-                  <option value="clinician">Clinician</option>
-                </Form.Select>
-              </Form.Group>
-
-              {form.role === 'patient' && (
-                <Row className="mb-3">
-                  <Col>
-                    <Form.Label className="hs-form-label">Date of Birth</Form.Label>
-                    <Form.Control
-                      type="date"
-                      name="date_of_birth"
-                      value={form.date_of_birth}
-                      onChange={handleChange}
-                    />
-                  </Col>
-                  <Col>
-                    <Form.Label className="hs-form-label">Sex</Form.Label>
-                    <Form.Select name="sex" value={form.sex} onChange={handleChange}>
-                      <option value="">Select...</option>
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                      <option value="Other">Other</option>
-                    </Form.Select>
-                  </Col>
-                </Row>
-              )}
+              <Row className="mb-3">
+                <Col>
+                  <Form.Label className="hs-form-label">Date of Birth</Form.Label>
+                  <Form.Control
+                    type="date"
+                    name="date_of_birth"
+                    value={form.date_of_birth}
+                    onChange={handleChange}
+                  />
+                </Col>
+                <Col>
+                  <Form.Label className="hs-form-label">Sex</Form.Label>
+                  <Form.Select name="sex" value={form.sex} onChange={handleChange}>
+                    <option value="">Select...</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                  </Form.Select>
+                </Col>
+              </Row>
 
               <Button type="submit" className="btn-hs-primary w-100" disabled={loading}>
                 {loading ? 'Creating account...' : 'Register'}
