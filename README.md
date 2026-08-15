@@ -4,6 +4,7 @@ Final year project  Dedan Kimathi University of Technology.
 
 ## Structure
 - `backend/` — FastAPI + PostgreSQL
+- `frontend/` -- React Js and Bootstrap
+- 
 
-## Getting Started
-See setup instructions in each subfolder.
+
