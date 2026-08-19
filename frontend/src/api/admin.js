@@ -13,3 +13,14 @@ export async function createClinician(payload) {
 export async function deleteUser(userId) {
   await apiClient.delete(`/users/${userId}`);
 }
+export async function getUser(userId) {
+  const response = await apiClient.get(`/users/${userId}`);
+  return response.data
+}
+
+export async function updateUser(userId,payload) {
+  const response = await apiClient.put(`/users/${userId}`,payload);
+}
+export async function resetPassword(userId,newPassword) {
+  await apiClient.post(`/users/${userId}/reset-password`,{new_password: newPassword});
+}

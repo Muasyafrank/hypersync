@@ -30,4 +30,19 @@ class ClinicianCreate(BaseModel):
     full_name:str
     email: EmailStr
     password: str = Field(min_length=8)
+
+class UserUpdate(BaseModel):
+    full_name:  str | None = None
+    email: EmailStr | None = None
+    role: UserRole | None = None
+    password: str | None = Field(default=None, min_length=8)
+
+class UserDetailOut(UserOut):
+    date_of_birth: date | None = None
+    sex: SexEnum | None = None
+    reading_count: int | None = None
+
+class PasswordReset(BaseModel):
+    new_password: str = Field(min_length=8)
+    
         

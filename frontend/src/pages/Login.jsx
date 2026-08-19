@@ -5,7 +5,7 @@ import { loginUser, getCurrentUser } from '../api/auth';
 import { useAuth } from '../context/AuthContext';
 import { setTokens } from '../api/tokenStorage';
 import { useToast } from '../context/ToastContext';
-
+import PasswordInput  from "../components/PasswordInput";
 export default function Login() {
   const navigate = useNavigate();
   const { login } = useAuth();
@@ -74,12 +74,9 @@ export default function Login() {
 
               <Form.Group className="mb-4">
                 <Form.Label className="hs-form-label">Password</Form.Label>
-                <Form.Control
-                  type="password"
-                  name="password"
+                <PasswordInput
                   value={form.password}
                   onChange={handleChange}
-                  placeholder="••••••••"
                   required
                 />
               </Form.Group>

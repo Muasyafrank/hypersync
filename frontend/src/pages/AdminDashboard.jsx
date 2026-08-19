@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
 import { Container, Row, Col, Spinner, Form, Button, Modal, Alert } from 'react-bootstrap';
-import { Users, UserCog, Plus, Trash2 } from 'lucide-react';
+import { Users, UserCog, Plus, KeyRound, Eye, Pencil, Trash2 } from 'lucide-react';
 import Layout from '../components/Layout';
-import { getAllUsers, createClinician, deleteUser } from '../api/admin';
+import { getAllUsers, createClinician, deleteUser, updateUser, resetPassword } from '../api/admin';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { useAuth } from '../context/AuthContext';
+import { getUser } from '../api/admin';
+import PasswordInput from '../components/PasswordInput';
+
 
 export default function AdminDashboard() {
   const { user: currentUser } = useAuth();
@@ -18,6 +21,89 @@ export default function AdminDashboard() {
   const [form, setForm] = useState({ full_name: '', email: '', password: '' });
   const [formError, setFormError] = useState('');
   const [creating, setCreating] = useState(false);
+
+  const [editUser, setEditUser] = useState(null);
+  const [editForm, setEditForm] = useState({ full_name: '', email: '', role: '' });
+  const [editError, setEditError] = useState(' ');
+  const [saving, setSaving] = useState(false);
+
+  const [resetUser, setResetUser] = useState(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [resetError, setResetError] = useState('');
+  const [resetting, setResetting] = useState('');
+
+  const [viewUser, setViewUser] = useState(null);
+  const [viewLoading, setViewLoading] = useState(false);
+
+
+
+  async function handleEditSave(e) {
+    e.preventDefault();
+    setEditError('');
+    setSaving(true);
+    try {
+      const payload = {
+        full_name: editForm.full_name,
+        email: editForm.email,
+        role: editForm.role,
+      };
+      if (editForm.password) payload.password = editForm.password;
+
+      await updateUser(editUser.user_id, payload);
+      toast.success('User Updated');
+      setEditUser(null);
+      load();
+    } catch (err) {
+      const detail = err.response?.data?.detail;
+      setEditError(typeof detail === 'string' ? detail : 'Could not update user.');
+
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function openView(u) {
+    setViewUser({ ...u });
+    setViewLoading(true);
+    try {
+      const full = await getUser(u.user_id);
+      setViewUser(full);
+    } catch {
+      toast.error("Could not load user details")
+    } finally {
+      setViewLoading(false);
+    }
+  }
+
+  function openEdit(u) {
+    setEditUser(u);
+    setEditForm({ full_name: u.full_name, email: u.email, role: u.role, password: '' });
+    setEditError('');
+  }
+
+
+  function openReset(u) {
+    setResetUser(u);
+    setNewPassword('');
+    setResetError('');
+  }
+
+  async function handleResetSave(e) {
+    e.preventDefault();
+    setResetError('');
+    setResetting(true);
+
+    try {
+      await resetPassword(resetUser.user_id, newPassword);
+      toast.success(`Password reset for ${resetUser.full_name}.`);
+      setResetUser(null)
+    } catch (err) {
+      const detail = err.response?.data?.detail;
+      setResetError(typeof detail === 'string' ? detail : 'Could not reset password.');
+    } finally {
+      setResetting(false);
+    }
+  }
 
   useEffect(() => {
     load();
@@ -144,13 +230,10 @@ export default function AdminDashboard() {
                 </div>
                 <div className="d-flex align-items-center gap-3">
                   {roleBadge(u.role)}
+                  <Eye size={17} color="#94A3B8" style={{ cursor: 'pointer' }} onClick={() => openView(u)} />
+                  <Pencil size={17} color="#94A3B8" style={{ cursor: 'pointer' }} onClick={() => openEdit(u)} />
                   {u.user_id !== currentUser?.user_id && (
-                    <Trash2
-                      size={18}
-                      color="#94A3B8"
-                      style={{ cursor: 'pointer' }}
-                      onClick={() => handleDelete(u)}
-                    />
+                    <Trash2 size={18} color="#94A3B8" style={{ cursor: 'pointer' }} onClick={() => handleDelete(u)} />
                   )}
                 </div>
               </div>
@@ -175,12 +258,16 @@ export default function AdminDashboard() {
             </Form.Group>
             <Form.Group className="mb-3">
               <Form.Label className="hs-form-label">Email</Form.Label>
-              <Form.Control type="email" name="email" value={form.email} onChange={handleFormChange} required />
+              <Form.Control type="email" name="email" onChange={handleFormChange} required />
             </Form.Group>
             <Form.Group className="mb-4">
               <Form.Label className="hs-form-label">Temporary Password</Form.Label>
-              <Form.Control type="password" name="password" value={form.password} onChange={handleFormChange} minLength={8} required />
-              <Form.Text className="text-muted">At least 8 characters. Share this with the clinician securely.</Form.Text>
+              <PasswordInput
+                // value={form.password}
+                onChange={handleFormChange}
+                minLength={8}
+                autoComplete="new-password"
+              />
             </Form.Group>
 
             <div className="d-flex justify-content-end gap-2">
@@ -194,6 +281,113 @@ export default function AdminDashboard() {
           </Form>
         </Modal.Body>
       </Modal>
+
+      <Modal show={!!editUser} onHide={() => setEditUser(null)} centered>
+        <Modal.Body className="p-4">
+          <h5 className="hs-title mb-3">Edit User</h5>
+          {editError && <Alert variant="danger">{editError}</Alert>}
+          <Form onSubmit={handleEditSave}>
+            <Form.Group className="mb-3">
+              <Form.Label className="hs-form-label">Full Name</Form.Label>
+              <Form.Control value={editForm.full_name} onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })} required />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label className="hs-form-label">Email</Form.Label>
+              <Form.Control type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} required />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label className="hs-form-label">Role</Form.Label>
+              <Form.Select
+                value={editForm.role}
+                onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
+                disabled={editUser?.user_id === currentUser?.user_id}
+              >
+                <option value="patient">Patient</option>
+                <option value="clinician">Clinician</option>
+                <option value="admin">Admin</option>
+              </Form.Select>
+              {editUser?.user_id === currentUser?.user_id && (
+                <Form.Text className="text-muted">You can't change your own role.</Form.Text>
+              )}
+            </Form.Group>
+            <Form.Group className="mb-4">
+              <Form.Label className="hs-form-label">New Password</Form.Label>
+              <PasswordInput
+                value={editForm.password}
+                onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
+                minLength={8}
+                autoComplete="new-password"
+              />
+              <Form.Text className="text-muted">Leave blank to keep the current password.</Form.Text>
+            </Form.Group>
+            <div className="d-flex justify-content-end gap-2">
+              <Button variant="outline-secondary" onClick={() => setEditUser(null)} disabled={saving}>Cancel</Button>
+              <Button type="submit" className="btn-hs-primary" disabled={saving}>{saving ? 'Saving...' : 'Save Changes'}</Button>
+            </div>
+          </Form>
+        </Modal.Body>
+      </Modal>
+
+      <Modal show={!!resetUser} onHide={() => setResetUser(null)} centered>
+        <Modal.Body className="p-4">
+          <h5 className="hs-title mb-1">Reset Password</h5>
+          <p className="hs-subtitle mb-3" style={{ fontSize: '0.88rem' }}>
+            Set a new password for {resetUser?.full_name}. Share it with them securely.
+          </p>
+
+          {resetError && <Alert variant="danger">{resetError}</Alert>}
+
+          <Form onSubmit={handleResetSave}>
+            <Form.Group className="mb-4">
+              <Form.Label className="hs-form-label">New Password</Form.Label>
+              <Form.Control
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                minLength={8}
+                required
+              />
+              <Form.Text className="text-muted">At least 8 characters.</Form.Text>
+            </Form.Group>
+
+            <div className="d-flex justify-content-end gap-2">
+              <Button variant="outline-secondary" onClick={() => setResetUser(null)} disabled={resetting}>
+                Cancel
+              </Button>
+              <Button type="submit" className="btn-hs-primary" disabled={resetting}>
+                {resetting ? 'Resetting...' : 'Reset Password'}
+              </Button>
+            </div>
+          </Form>
+        </Modal.Body>
+      </Modal>
+
+      <Modal show={!!viewUser} onHide={() => setViewUser(null)} centered>
+        <Modal.Body className="p-4">
+          <h5 className="hs-title mb-3">User Details</h5>
+          {viewLoading ? (
+            <div className="text-center py-3"><Spinner animation="border" style={{ color: 'var(--hs-teal)' }} /></div>
+          ) : viewUser && (
+            <div>
+              <Row className="mb-2"><Col xs={5} className="hs-subtitle">Full Name</Col><Col style={{ color: 'var(--hs-navy)', fontWeight: 600 }}>{viewUser.full_name}</Col></Row>
+              <Row className="mb-2"><Col xs={5} className="hs-subtitle">Email</Col><Col>{viewUser.email}</Col></Row>
+              <Row className="mb-2"><Col xs={5} className="hs-subtitle">Role</Col><Col>{roleBadge(viewUser.role)}</Col></Row>
+              <Row className="mb-2"><Col xs={5} className="hs-subtitle">Joined</Col><Col>{new Date(viewUser.created_at).toLocaleDateString()}</Col></Row>
+              {viewUser.role === 'patient' && (
+                <>
+                  <Row className="mb-2"><Col xs={5} className="hs-subtitle">Date of Birth</Col><Col>{viewUser.date_of_birth || '—'}</Col></Row>
+                  <Row className="mb-2"><Col xs={5} className="hs-subtitle">Sex</Col><Col>{viewUser.sex || '—'}</Col></Row>
+                  <Row className="mb-2"><Col xs={5} className="hs-subtitle">Readings Logged</Col><Col>{viewUser.reading_count ?? 0}</Col></Row>
+                </>
+              )}
+            </div>
+          )}
+          <div className="d-flex justify-content-end mt-3">
+            <Button variant="outline-secondary" onClick={() => setViewUser(null)}>Close</Button>
+          </div>
+        </Modal.Body>
+      </Modal>
+
     </Layout>
   );
 }
