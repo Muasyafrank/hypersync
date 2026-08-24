@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Heart, LayoutGrid, LineChart, Activity, Bell, LogOut, Menu, X, Users, UserCog } from 'lucide-react';
+import { Heart, LayoutGrid, LineChart, Activity, Bell, LogOut, Menu, X, Users, UserCog,AlertTriangle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useConfirm } from '../context/ConfirmContext'
 
@@ -95,9 +95,11 @@ export default function Layout({ children }) {
                         </NavLink>
                     )}
 
-                    <NavLink to="/alerts" onClick={closeSidebar} className={({ isActive }) => `hs-sidebar-link${isActive ? ' active' : ''}`}>
-                        <Bell size={18} /> Alerts
-                    </NavLink>
+                    {role === 'clinician' && (
+                        <NavLink to="/clinician/alerts" onClick={closeSidebar} className={({ isActive }) => `hs-sidebar-link${isActive ? ' active' : ''}`}>
+                            <AlertTriangle size={18} /> Alert Queue
+                        </NavLink>
+                    )}
                 </nav>
 
                 <div className="hs-sidebar-footer">

@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import { Container, Row, Col, Button, Badge, Spinner, Alert } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { Heart, TrendingUp, Activity, Bell, ArrowRight } from 'lucide-react';
+import { Heart, TrendingUp, Activity, Bell, ArrowRight, Lightbulb } from 'lucide-react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { getMyReadings, getMyTrend } from '../api/readings';
+import { getMyRecommendations } from "../api/recommendations";
 import { statusInfo } from '../utils/statusColors';
+import { getMyAlerts } from '../api/alerts';
 
 // Safe helper for status info with fallback values
 const getSafeStatus = (key) => {
@@ -23,24 +25,36 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  const [recommendations, setRecommendations] = useState([]);
+  const [loadingRecs, setLoadingRecs] = useState(true);
+
+  const [unreadAlerts, setUnreadAlerts] = useState(0);
+
+
   useEffect(() => {
-    let isMounted = true;
-    
+    getMyAlerts()
+      .then((data) => setUnreadAlerts(data.filter((a) => !a.acknowledged).length))
+      .catch(() => { });
+    let cancelled = false;
     Promise.all([getMyReadings(), getMyTrend(30)])
       .then(([r, t]) => {
-        if (!isMounted) return;
+        if (cancelled) return;
         setReadings(Array.isArray(r) ? r : []);
         setTrend30(t || null);
       })
-      .catch((err) => {
-        console.error("Failed to load dashboard data:", err);
-        if (isMounted) setError("Failed to load health metrics.");
+      .catch(() => {
+        if (!cancelled) setError('Could not load your dashboard data. Please try refreshing.');
       })
       .finally(() => {
-        if (isMounted) setLoading(false);
+        if (!cancelled) setLoading(false);
       });
 
-    return () => { isMounted = false; };
+    getMyRecommendations(7)
+      .then((data) => { if (!cancelled) setRecommendations(data); })
+      .catch(() => { })
+      .finally(() => { if (!cancelled) setLoadingRecs(false); });
+
+    return () => { cancelled = true; };
   }, []);
 
   if (loading) {
@@ -90,11 +104,11 @@ export default function Dashboard() {
     if (!dateStr) return '';
     const date = new Date(dateStr);
     if (isNaN(date.getTime())) return '';
-    return date.toLocaleString(undefined, { 
-      month: 'short', 
-      day: 'numeric', 
-      hour: 'numeric', 
-      minute: '2-digit' 
+    return date.toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
     });
   }
 
@@ -164,7 +178,7 @@ export default function Dashboard() {
                 <span>Unread Alerts</span>
                 <Bell size={16} color="#94A3B8" />
               </div>
-              <div className="hs-stat-value h3 mb-1 mt-2">0</div>
+              <div className="hs-stat-value ">{unreadAlerts}</div>
             </div>
           </Col>
         </Row>
@@ -244,6 +258,37 @@ export default function Dashboard() {
             </div>
           </Col>
         </Row>
+        {recommendations.length > 0 && (
+          <div className="hs-panel mt-3">
+            <div className="d-flex align-items-center gap-2 mb-3">
+              <Lightbulb size={18} color="var(--hs-teal)" />
+              <h5 className="hs-title mb-0">Recommendations for you</h5>
+            </div>
+
+            {loadingRecs ? (
+              <div className="text-center py-3"><Spinner animation="border" size="sm" style={{ color: 'var(--hs-teal)' }} /></div>
+            ) : (
+              recommendations.map((rec) => {
+                const trendColor = rec.based_on_trend ? statusInfo(rec.based_on_trend) : null;
+                return (
+                  <div
+                    key={rec.recommendation_id}
+                    className="hs-reading-row"
+                    style={{ justifyContent: 'flex-start', alignItems: 'flex-start' }}
+                  >
+                    <div
+                      className="hs-reading-row-accent"
+                      style={{ backgroundColor: trendColor ? trendColor.accent : '#94A3B8', marginTop: 2 }}
+                    />
+                    <div style={{ fontSize: '0.9rem', color: 'var(--hs-navy)', lineHeight: 1.5 }}>
+                      {rec.message}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
       </Container>
     </Layout>
   );

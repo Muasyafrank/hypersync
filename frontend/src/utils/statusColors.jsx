@@ -9,3 +9,10 @@ export const STATUS_COLORS = {
 export function statusInfo(status) {
   return STATUS_COLORS[status] || STATUS_COLORS.no_data;
 }
+export function classifyBP(systolic, diastolic) {
+  if (!systolic || !diastolic) return null;
+  if (systolic < 90 || diastolic < 60) return 'low';
+  if (systolic >= 150 || diastolic >= 95) return 'high';
+  if (systolic >= 135 || diastolic >= 85) return 'elevated';
+  return 'controlled';
+}

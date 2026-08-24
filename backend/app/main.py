@@ -1,13 +1,15 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import auth,readings,users
+from app.routers import auth,readings,users,environmental_factor,recommendations,alerts
 
 
 app = FastAPI(title = "HyperSync API")
 app.include_router(auth.router)
 app.include_router(readings.router)
 app.include_router(users.router)
-
+app.include_router(environmental_factor.router)
+app.include_router(recommendations.router)
+app.include_router(alerts.router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],

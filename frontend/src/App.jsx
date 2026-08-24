@@ -11,6 +11,9 @@ import Trend from './pages/Trend';
 import ClinicianDashboard from './pages/ClinicianDashboard';
 import ClinicianPatientDetail from './pages/ClinicianPatientDetail';
 import AdminDashboard from './pages/AdminDashboard';
+import Lifestyle from './pages/Lifestyle';
+import Alerts from './pages/Alerts';
+import ClinicianAlerts from './pages/ClinicianAlerts';
 
 function PrivateRoute({ children, allowedRoles }) {
   const { user, loading } = useAuth();
@@ -34,7 +37,10 @@ function AppRoutes() {
       <Route path="/readings" element={<PrivateRoute allowedRoles={['patient']}><ReadingsHistory /></PrivateRoute>} />
       <Route path="/readings/new" element={<PrivateRoute allowedRoles={['patient']}><LogReading /></PrivateRoute>} />
       <Route path="/trend" element={<PrivateRoute allowedRoles={['patient']}><Trend /></PrivateRoute>} />
+      <Route path="/lifestyle" element={<PrivateRoute allowedRoles={['patient']}><Lifestyle /></PrivateRoute>} />
       <Route path="/admin" element={<PrivateRoute allowedRoles={['admin']}><AdminDashboard /></PrivateRoute>} />
+      <Route path="/alerts" element={<PrivateRoute allowedRoles={['patient']}><Alerts /></PrivateRoute>} />
+<Route path="/clinician/alerts" element={<PrivateRoute allowedRoles={['clinician']}><ClinicianAlerts /></PrivateRoute>} />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );

@@ -11,6 +11,8 @@ from app.schemas.reading import BPReadingCreate, BPReadingOut
 from app.core.bp_classification import classify_bp
 from app.core.trend_analysis import compute_trend
 from app.schemas.trend import TrendSummary
+from app.core.alert_engine import maybe_create_alert
+
 
 router = APIRouter(prefix="/readings", tags=["Blood Pressure Readings"])
 
@@ -22,7 +24,6 @@ def _to_out(reading: BPReading) -> BPReadingOut:
         diastolic=reading.diastolic,
         heart_rate=reading.heart_rate,
         recorded_at=reading.recorded_at,
-        source=reading.source,
         notes= reading.notes or " ",
         status=classify_bp(reading.systolic, reading.diastolic),
     )
@@ -41,13 +42,15 @@ def create_reading(
         diastolic=payload.diastolic,
         heart_rate=payload.heart_rate,
         recorded_at=payload.recorded_at or None,
-        source=payload.source,
         notes= payload.notes
     )
     db.add(reading)
     db.commit()
     db.refresh(reading)
+    trend = compute_trend(db,current_user.user_id,period_days=7)
+    maybe_create_alert(db,current_user.user_id,trend.status,period_days=7)
     return _to_out(reading)
+
 
 @router.get("/me", response_model=List[BPReadingOut])
 def get_my_readings(

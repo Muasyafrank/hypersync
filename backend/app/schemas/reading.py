@@ -33,7 +33,6 @@ class BPReadingOut(BaseModel):
     diastolic: int
     heart_rate: int | None
     recorded_at: datetime
-    source: str
     status: str
     notes: str
 
