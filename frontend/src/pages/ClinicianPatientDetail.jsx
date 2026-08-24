@@ -5,14 +5,17 @@ import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis,
   CartesianGrid, Tooltip, Legend, ReferenceArea,
 } from 'recharts';
-import { ArrowLeft, Calendar } from 'lucide-react';
+import { ArrowLeft, Calendar, Brain, Moon, Salad, Pill } from 'lucide-react';
 import Layout from '../components/Layout';
-import { getPatients, getPatientReadings, getPatientTrend } from '../api/clinician';
+import { getPatients, getPatientReadings, getPatientTrend, getPatientFactors
+
+ } from '../api/clinician';
 import { statusInfo } from '../utils/statusColors';
 
 export default function ClinicianPatientDetail() {
   const { patientId } = useParams();
   const navigate = useNavigate();
+
 
   const [patient, setPatient] = useState(null);
   const [readings, setReadings] = useState([]);
@@ -20,16 +23,19 @@ export default function ClinicianPatientDetail() {
   const [periodDays, setPeriodDays] = useState(30);
   const [loading, setLoading] = useState(true);
 
+  const [factors, setFactors] = useState([])
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
 
-    Promise.all([getPatients(), getPatientReadings(patientId), getPatientTrend(patientId, periodDays)])
-      .then(([patients, readingsData, trendData]) => {
+    Promise.all([getPatients(), getPatientReadings(patientId), getPatientTrend(patientId, periodDays),getPatientFactors(patientId)])
+      .then(([patients, readingsData, trendData, factorsData]) => {
         if (cancelled) return;
         setPatient(patients.find((p) => p.user_id === patientId) || null);
         setReadings(readingsData);
         setTrend(trendData);
+        setFactors(factorsData)
       })
       .finally(() => { if (!cancelled) setLoading(false); });
 
@@ -126,6 +132,28 @@ export default function ClinicianPatientDetail() {
                 </div>
               );
             })
+          )}
+        </div>
+        <div className="hs-panel mt-4">
+          <h5 className="hs-title mb-3">Lifestyle &amp; Environmental Factors</h5>
+          {factors.length === 0 ? (
+            <p className="hs-subtitle">No lifestyle entries logged yet.</p>
+          ) : (
+            factors.map((f) => (
+              <div key={f.factor_id} className="hs-reading-row">
+                <div>
+                  <div style={{ fontWeight: 700, color: 'var(--hs-navy)', fontSize: '0.9rem' }}>
+                    {new Date(f.logged_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </div>
+                  <div className="d-flex gap-3 mt-1 flex-wrap" style={{ fontSize: '0.8rem', color: '#64748B' }}>
+                    {f.stress_level && <span className="d-flex align-items-center gap-1"><Brain size={13} /> {f.stress_level} stress</span>}
+                    {f.sleep_hours != null && <span className="d-flex align-items-center gap-1"><Moon size={13} /> {f.sleep_hours}h sleep</span>}
+                    {f.diet_adherence != null && <span className="d-flex align-items-center gap-1"><Salad size={13} /> {f.diet_adherence ? 'Diet followed' : 'Diet missed'}</span>}
+                    {f.medication_taken != null && <span className="d-flex align-items-center gap-1"><Pill size={13} /> {f.medication_taken ? 'Meds taken' : 'Meds missed'}</span>}
+                  </div>
+                </div>
+              </div>
+            ))
           )}
         </div>
       </Container>
