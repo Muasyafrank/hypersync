@@ -1,57 +1,55 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Container, Spinner, Form } from 'react-bootstrap';
-import {
-  ResponsiveContainer, LineChart, Line, XAxis, YAxis,
-  CartesianGrid, Tooltip, Legend, ReferenceArea,
-} from 'recharts';
-import { ArrowLeft, Calendar, Brain, Moon, Salad, Pill } from 'lucide-react';
+import { useState } from 'react';
+import { Container } from 'react-bootstrap';
+import { useNavigate, useParams } from 'react-router-dom';
+import { Brain, Calendar, Moon, Pill, Salad } from 'lucide-react';
 import Layout from '../components/Layout';
-import { getPatients, getPatientReadings, getPatientTrend, getPatientFactors
+import BPTrendChart from '../components/BPTrendChart';
+import PeriodSelect from '../components/PeriodSelect';
+import { DataRow, EmptyState, ErrorState, Loader, PageHeader, Panel, StatusPill } from '../components/ui';
+import { useAsync } from '../hooks/useAsync';
+import { getPatient, getPatientFactors, getPatientReadings, getPatientTrend } from '../api/clinician';
+import { statusInfo } from '../utils/bpStatus';
+import { formatDateTime, formatFullDate } from '../utils/format';
 
- } from '../api/clinician';
-import { statusInfo } from '../utils/statusColors';
+const EMPTY = { patient: null, readings: [], trend: null, factors: [] };
+
+/** One lifestyle entry's tags, skipping anything the patient didn't log. */
+function factorTags(factor) {
+  const tags = [];
+  if (factor.stress_level) tags.push({ icon: Brain, text: `${factor.stress_level} stress` });
+  if (factor.sleep_hours != null) tags.push({ icon: Moon, text: `${factor.sleep_hours}h sleep` });
+  if (factor.diet_adherence != null) tags.push({ icon: Salad, text: factor.diet_adherence ? 'Diet followed' : 'Diet missed' });
+  if (factor.medication_taken != null) tags.push({ icon: Pill, text: factor.medication_taken ? 'Meds taken' : 'Meds missed' });
+  return tags;
+}
 
 export default function ClinicianPatientDetail() {
   const { patientId } = useParams();
   const navigate = useNavigate();
-
-
-  const [patient, setPatient] = useState(null);
-  const [readings, setReadings] = useState([]);
-  const [trend, setTrend] = useState(null);
   const [periodDays, setPeriodDays] = useState(30);
-  const [loading, setLoading] = useState(true);
 
-  const [factors, setFactors] = useState([])
+  const { data, loading, error, reload } = useAsync(
+    async () => {
+      // Fetched by id rather than by listing every patient and filtering.
+      const [patient, readings, trend, factors] = await Promise.all([
+        getPatient(patientId),
+        getPatientReadings(patientId),
+        getPatientTrend(patientId, periodDays),
+        getPatientFactors(patientId).catch(() => []),
+      ]);
+      return { patient, readings, trend, factors };
+    },
+    [patientId, periodDays],
+    EMPTY,
+  );
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
+  const { patient, readings, trend, factors } = data ?? EMPTY;
 
-    Promise.all([getPatients(), getPatientReadings(patientId), getPatientTrend(patientId, periodDays),getPatientFactors(patientId)])
-      .then(([patients, readingsData, trendData, factorsData]) => {
-        if (cancelled) return;
-        setPatient(patients.find((p) => p.user_id === patientId) || null);
-        setReadings(readingsData);
-        setTrend(trendData);
-        setFactors(factorsData)
-      })
-      .finally(() => { if (!cancelled) setLoading(false); });
-
-    return () => { cancelled = true; };
-  }, [patientId, periodDays]);
-
-  const chartData = (trend?.daily_breakdown || []).map((d) => ({
-    date: new Date(d.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-    Systolic: d.avg_systolic,
-    Diastolic: d.avg_diastolic,
-  }));
-
-  if (loading) {
+  if (loading) return <Layout><Loader className="py-5" /></Layout>;
+  if (error) {
     return (
       <Layout>
-        <div className="text-center py-5"><Spinner animation="border" style={{ color: 'var(--hs-teal)' }} /></div>
+        <ErrorState message="Could not load this patient's record." onRetry={reload} />
       </Layout>
     );
   }
@@ -59,103 +57,67 @@ export default function ClinicianPatientDetail() {
   return (
     <Layout>
       <Container fluid className="px-0">
-        <div className="d-flex align-items-center gap-3 mb-1">
-          <ArrowLeft size={20} style={{ cursor: 'pointer', color: 'var(--hs-navy)' }} onClick={() => navigate('/clinician')} />
-          <h2 className="hs-title mb-0">{patient?.full_name || 'Patient'}</h2>
-        </div>
-        <p className="hs-subtitle mb-4">{patient?.email}</p>
+        <PageHeader
+          title={patient?.full_name || 'Patient'}
+          subtitle={patient?.email}
+          onBack={() => navigate('/clinician')}
+        />
 
-        <div className="hs-panel mb-4">
-          <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-            <h5 className="hs-title mb-0">Blood Pressure Trend</h5>
-            <Form.Select
-              style={{ width: 'auto' }}
-              value={periodDays}
-              onChange={(e) => setPeriodDays(Number(e.target.value))}
-            >
-              <option value={7}>Last 7 Days</option>
-              <option value={14}>Last 14 Days</option>
-              <option value={30}>Last 30 Days</option>
-              <option value={90}>Last 90 Days</option>
-            </Form.Select>
-          </div>
-
-          {chartData.length === 0 ? (
-            <p className="hs-subtitle text-center py-4">No readings in this period.</p>
+        <Panel
+          title="Blood pressure trend"
+          className="mb-4"
+          action={<PeriodSelect value={periodDays} onChange={setPeriodDays} />}
+        >
+          {trend?.daily_breakdown?.length ? (
+            <BPTrendChart dailyBreakdown={trend.daily_breakdown} height={380} animate={false} />
           ) : (
-            <div style={{ width: '100%', height: 380 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
-                  <XAxis dataKey="date" stroke="#64748B" fontSize={12} />
-                  <YAxis stroke="#64748B" fontSize={12} domain={[40, 200]} ticks={[40, 80, 120, 160, 200]} />
-                  <ReferenceArea y1={40} y2={90} fill="#DBEAFE" fillOpacity={0.35} ifOverflow="extendDomain" />
-                  <ReferenceArea y1={90} y2={135} fill="#DCFCE7" fillOpacity={0.4} ifOverflow="extendDomain" />
-                  <ReferenceArea y1={135} y2={150} fill="#FEF9C3" fillOpacity={0.5} ifOverflow="extendDomain" />
-                  <ReferenceArea y1={150} y2={200} fill="#FEE2E2" fillOpacity={0.45} ifOverflow="extendDomain" />
-                  <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #E2E8F0' }} labelStyle={{ color: '#0F172A', fontWeight: 600 }} />
-                  <Legend />
-                  <Line type="monotone" dataKey="Systolic" stroke="#0D9488" strokeWidth={2.5} dot={{ r: 4 }} isAnimationActive={false} />
-                  <Line type="monotone" dataKey="Diastolic" stroke="#0F172A" strokeWidth={2.5} dot={{ r: 4 }} isAnimationActive={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+            <EmptyState message="No readings in this period." />
           )}
-        </div>
+        </Panel>
 
-        <div className="hs-panel">
-          <h5 className="hs-title mb-3">Reading History</h5>
+        <Panel title="Reading history">
           {readings.length === 0 ? (
-            <p className="hs-subtitle">No readings logged yet.</p>
+            <EmptyState message="No readings logged yet." />
           ) : (
-            readings.map((r) => {
-              const s = statusInfo(r.status);
-              return (
-                <div key={r.reading_id} className="hs-reading-row">
-                  <div className="d-flex align-items-center">
-                    <div className="hs-reading-row-accent" style={{ backgroundColor: s.accent }} />
-                    <div>
-                      <div style={{ fontWeight: 700, color: 'var(--hs-navy)' }}>
-                        {r.systolic}/{r.diastolic} <span style={{ fontWeight: 400, fontSize: '0.85rem', color: '#94A3B8' }}>mmHg</span>
-                        {r.heart_rate && <span style={{ fontWeight: 400, fontSize: '0.85rem', color: '#94A3B8' }}> · {r.heart_rate} bpm</span>}
-                      </div>
-                      <div className="d-flex align-items-center gap-1" style={{ fontSize: '0.8rem', color: '#94A3B8' }}>
-                        <Calendar size={13} />
-                        {new Date(r.recorded_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                      </div>
-                      {r.notes && <div style={{ fontSize: '0.8rem', color: '#64748B', marginTop: 2 }}>"{r.notes}"</div>}
-                    </div>
-                  </div>
-                  <span style={{ backgroundColor: s.bg, color: s.text, fontWeight: 600, padding: '0.35rem 0.7rem', borderRadius: '20px', fontSize: '0.85rem' }}>
-                    {s.label}
-                  </span>
+            readings.map((reading) => (
+              <DataRow
+                key={reading.reading_id}
+                accent={statusInfo(reading.status).accent}
+                trailing={<StatusPill status={reading.status} />}
+              >
+                <div className="hs-reading-value">
+                  {reading.systolic}/{reading.diastolic} <span className="hs-reading-unit">mmHg</span>
+                  {reading.heart_rate && <span className="hs-reading-unit"> · {reading.heart_rate} bpm</span>}
                 </div>
-              );
-            })
-          )}
-        </div>
-        <div className="hs-panel mt-4">
-          <h5 className="hs-title mb-3">Lifestyle &amp; Environmental Factors</h5>
-          {factors.length === 0 ? (
-            <p className="hs-subtitle">No lifestyle entries logged yet.</p>
-          ) : (
-            factors.map((f) => (
-              <div key={f.factor_id} className="hs-reading-row">
-                <div>
-                  <div style={{ fontWeight: 700, color: 'var(--hs-navy)', fontSize: '0.9rem' }}>
-                    {new Date(f.logged_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                  </div>
-                  <div className="d-flex gap-3 mt-1 flex-wrap" style={{ fontSize: '0.8rem', color: '#64748B' }}>
-                    {f.stress_level && <span className="d-flex align-items-center gap-1"><Brain size={13} /> {f.stress_level} stress</span>}
-                    {f.sleep_hours != null && <span className="d-flex align-items-center gap-1"><Moon size={13} /> {f.sleep_hours}h sleep</span>}
-                    {f.diet_adherence != null && <span className="d-flex align-items-center gap-1"><Salad size={13} /> {f.diet_adherence ? 'Diet followed' : 'Diet missed'}</span>}
-                    {f.medication_taken != null && <span className="d-flex align-items-center gap-1"><Pill size={13} /> {f.medication_taken ? 'Meds taken' : 'Meds missed'}</span>}
-                  </div>
+                <div className="hs-reading-meta">
+                  <Calendar size={13} /> {formatDateTime(reading.recorded_at)}
                 </div>
-              </div>
+                {reading.notes && <div className="hs-reading-note">“{reading.notes}”</div>}
+              </DataRow>
             ))
           )}
-        </div>
+        </Panel>
+
+        <Panel title="Lifestyle &amp; environmental factors" className="mt-4">
+          {factors.length === 0 ? (
+            <EmptyState message="No lifestyle entries logged yet." />
+          ) : (
+            factors.map((factor) => (
+              <DataRow key={factor.factor_id}>
+                <div className="hs-reading-value" style={{ fontSize: '0.9rem' }}>
+                  {formatFullDate(factor.logged_date)}
+                </div>
+                <div className="d-flex gap-3 mt-1 flex-wrap hs-factor-tags">
+                  {factorTags(factor).map(({ icon: Icon, text }) => (
+                    <span key={text} className="d-flex align-items-center gap-1">
+                      <Icon size={13} /> {text}
+                    </span>
+                  ))}
+                </div>
+              </DataRow>
+            ))
+          )}
+        </Panel>
       </Container>
     </Layout>
   );

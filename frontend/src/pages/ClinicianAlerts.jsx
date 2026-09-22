@@ -1,93 +1,106 @@
-import { useState, useEffect } from 'react';
-import { Container, Spinner, Button, Form } from 'react-bootstrap';
+import { useState } from 'react';
+import { Button, Container, Form } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 import Layout from '../components/Layout';
-import { getAllAlerts, acknowledgeAlert } from '../api/alerts';
+import { DataRow, EmptyState, ErrorState, Loader, PageHeader, Panel } from '../components/ui';
+import { useAsync } from '../hooks/useAsync';
 import { useToast } from '../context/ToastContext';
+import { acknowledgeAlert, getAllAlerts } from '../api/alerts';
+import { errorMessage, formatDateTime } from '../utils/format';
+
+const HIGH_ACCENT = '#DC2626';
+const ELEVATED_ACCENT = '#CA8A04';
 
 export default function ClinicianAlerts() {
   const navigate = useNavigate();
   const toast = useToast();
+  const [showAcknowledged, setShowAcknowledged] = useState(false);
+  const [pendingId, setPendingId] = useState(null);
 
-  const [alerts, setAlerts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showAll, setShowAll] = useState(false);
+  const { data: alerts, loading, error, reload } = useAsync(
+    () => getAllAlerts(!showAcknowledged),
+    [showAcknowledged],
+    [],
+  );
 
-  useEffect(() => {
-    load();
-  }, [showAll]);
-
-  function load() {
-    setLoading(true);
-    getAllAlerts(!showAll).then(setAlerts).finally(() => setLoading(false));
-  }
-
-  async function handleAcknowledge(id) {
+  async function handleAcknowledge(alertId) {
+    setPendingId(alertId);
     try {
-      await acknowledgeAlert(id);
+      await acknowledgeAlert(alertId);
       toast.success('Alert acknowledged.');
-      load();
-    } catch {
-      toast.error('Could not acknowledge alert.');
+      await reload();
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not acknowledge alert.'));
+    } finally {
+      setPendingId(null);
     }
   }
 
   return (
     <Layout>
       <Container fluid className="px-0">
-        <div className="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-2">
-          <div>
-            <h2 className="hs-title mb-1">Alert Queue</h2>
-            <p className="hs-subtitle mb-0">Patients whose blood pressure trend needs review.</p>
-          </div>
-          <Form.Check
-            type="switch"
-            id="show-all-switch"
-            label="Show acknowledged"
-            checked={showAll}
-            onChange={(e) => setShowAll(e.target.checked)}
-          />
-        </div>
+        <PageHeader
+          title="Alert queue"
+          subtitle="Patients whose blood pressure trend needs review."
+          action={
+            <Form.Check
+              type="switch"
+              id="show-acknowledged"
+              label="Show acknowledged"
+              checked={showAcknowledged}
+              onChange={(event) => setShowAcknowledged(event.target.checked)}
+            />
+          }
+        />
 
-        <div className="hs-panel">
+        <Panel>
           {loading ? (
-            <div className="text-center py-4"><Spinner animation="border" style={{ color: 'var(--hs-teal)' }} /></div>
+            <Loader />
+          ) : error ? (
+            <ErrorState message="Could not load the alert queue." onRetry={reload} />
           ) : alerts.length === 0 ? (
-            <div className="text-center py-5">
-              <CheckCircle2 size={28} color="#16A34A" className="mb-2" />
-              <p className="hs-subtitle mb-0">No unacknowledged alerts. Everything's under control.</p>
-            </div>
+            <EmptyState
+              icon={CheckCircle2}
+              iconColor="#16A34A"
+              message="No unacknowledged alerts. Everything's under control."
+            />
           ) : (
-            alerts.map((a) => (
-              <div key={a.alert_id} className="hs-reading-row" style={{ alignItems: 'flex-start' }}>
-                <div
-                  className="hs-reading-row-accent"
-                  style={{ backgroundColor: a.alert_type.includes('high') ? '#DC2626' : '#CA8A04', marginTop: 2 }}
-                />
-                <div className="flex-grow-1">
-                  <div
-                    className="d-flex align-items-center gap-2"
-                    style={{ fontWeight: 700, color: 'var(--hs-navy)', fontSize: '0.92rem', cursor: 'pointer' }}
-                    onClick={() => navigate(`/clinician/patients/${a.patient_id}`)}
+            alerts.map((alert) => {
+              const isHigh = alert.alert_type?.includes('high');
+              return (
+                <DataRow
+                  key={alert.alert_id}
+                  align="start"
+                  accent={isHigh ? HIGH_ACCENT : ELEVATED_ACCENT}
+                  trailing={
+                    !alert.acknowledged && (
+                      <Button
+                        size="sm"
+                        className="btn-hs-primary"
+                        disabled={pendingId === alert.alert_id}
+                        onClick={() => handleAcknowledge(alert.alert_id)}
+                      >
+                        {pendingId === alert.alert_id ? 'Saving…' : 'Acknowledge'}
+                      </Button>
+                    )
+                  }
+                >
+                  <button
+                    type="button"
+                    className="hs-alert-patient"
+                    onClick={() => navigate(`/clinician/patients/${alert.patient_id}`)}
                   >
-                    <AlertTriangle size={15} color={a.alert_type.includes('high') ? '#DC2626' : '#CA8A04'} />
-                    {a.patient_name || 'Patient'}
-                  </div>
-                  <div style={{ fontSize: '0.85rem', color: '#475569', marginTop: 2 }}>{a.message}</div>
-                  <div style={{ fontSize: '0.78rem', color: '#94A3B8', marginTop: 4 }}>
-                    {new Date(a.created_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                  </div>
-                </div>
-                {!a.acknowledged && (
-                  <Button size="sm" className="btn-hs-primary" onClick={() => handleAcknowledge(a.alert_id)}>
-                    Acknowledge
-                  </Button>
-                )}
-              </div>
-            ))
+                    <AlertTriangle size={15} color={isHigh ? HIGH_ACCENT : ELEVATED_ACCENT} />
+                    {alert.patient_name || 'Patient'}
+                  </button>
+                  <div className="hs-alert-message">{alert.message}</div>
+                  <div className="hs-reading-meta mt-1">{formatDateTime(alert.created_at)}</div>
+                </DataRow>
+              );
+            })
           )}
-        </div>
+        </Panel>
       </Container>
     </Layout>
   );

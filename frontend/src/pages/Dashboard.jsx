@@ -1,293 +1,206 @@
-import { useState, useEffect } from 'react';
-import { Container, Row, Col, Button, Badge, Spinner, Alert } from 'react-bootstrap';
+import { useMemo } from 'react';
+import { Button, Col, Container, Row } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { Heart, TrendingUp, Activity, Bell, ArrowRight, Lightbulb } from 'lucide-react';
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
+import { Activity, ArrowRight, Bell, Heart, Lightbulb, TrendingUp } from 'lucide-react';
 import Layout from '../components/Layout';
+import { DataRow, ErrorState, Loader, PageHeader, Panel, StatCard, StatusPill } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
+import { useAsync } from '../hooks/useAsync';
 import { getMyReadings, getMyTrend } from '../api/readings';
-import { getMyRecommendations } from "../api/recommendations";
-import { statusInfo } from '../utils/statusColors';
+import { getMyRecommendations } from '../api/recommendations';
 import { getMyAlerts } from '../api/alerts';
+import { statusInfo } from '../utils/bpStatus';
+import { formatDateTime, relativeDays } from '../utils/format';
 
-// Safe helper for status info with fallback values
-const getSafeStatus = (key) => {
-  const info = statusInfo(key);
-  return info || { label: 'Unknown', bg: '#6c757d', text: '#ffffff', accent: '#6c757d' };
-};
+const RECENT_LIMIT = 5;
+const TREND_WINDOW_DAYS = 30;
+const DISTRIBUTION_KEYS = ['controlled', 'elevated', 'high', 'low'];
+
+const EMPTY = { readings: [], trend: null, alerts: [] };
 
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const [readings, setReadings] = useState([]);
-  const [trend30, setTrend30] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  // Core dashboard data: one combined load so the page renders in one pass.
+  const { data, loading, error, reload } = useAsync(
+    async () => {
+      const [readings, trend, alerts] = await Promise.all([
+        getMyReadings(),
+        getMyTrend(TREND_WINDOW_DAYS),
+        getMyAlerts().catch(() => []), // non-critical
+      ]);
+      return { readings: readings ?? [], trend, alerts: alerts ?? [] };
+    },
+    [],
+    EMPTY,
+  );
 
-  const [recommendations, setRecommendations] = useState([]);
-  const [loadingRecs, setLoadingRecs] = useState(true);
+  // Recommendations load independently — they are slower (they run the model)
+  // and the rest of the dashboard shouldn't wait on them.
+  const { data: recommendations, loading: loadingRecs } = useAsync(
+    () => getMyRecommendations(7).catch(() => []),
+    [],
+    [],
+  );
 
-  const [unreadAlerts, setUnreadAlerts] = useState(0);
+  const { readings, trend, alerts } = data ?? EMPTY;
 
+  const distribution = useMemo(
+    () =>
+      DISTRIBUTION_KEYS.map((key) => {
+        const info = statusInfo(key);
+        return {
+          name: info.label,
+          value: readings.filter((r) => r?.status === key).length,
+          color: info.accent,
+        };
+      }).filter((entry) => entry.value > 0),
+    [readings],
+  );
 
-  useEffect(() => {
-    getMyAlerts()
-      .then((data) => setUnreadAlerts(data.filter((a) => !a.acknowledged).length))
-      .catch(() => { });
-    let cancelled = false;
-    Promise.all([getMyReadings(), getMyTrend(30)])
-      .then(([r, t]) => {
-        if (cancelled) return;
-        setReadings(Array.isArray(r) ? r : []);
-        setTrend30(t || null);
-      })
-      .catch(() => {
-        if (!cancelled) setError('Could not load your dashboard data. Please try refreshing.');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    getMyRecommendations(7)
-      .then((data) => { if (!cancelled) setRecommendations(data); })
-      .catch(() => { })
-      .finally(() => { if (!cancelled) setLoadingRecs(false); });
-
-    return () => { cancelled = true; };
-  }, []);
-
-  if (loading) {
-    return (
-      <Layout>
-        <div className="text-center py-5">
-          <Spinner animation="border" style={{ color: 'var(--hs-teal, #0d9488)' }} />
-        </div>
-      </Layout>
-    );
-  }
+  if (loading) return <Layout><Loader className="py-5" /></Layout>;
 
   if (error) {
     return (
       <Layout>
-        <Container className="py-4">
-          <Alert variant="danger">{error}</Alert>
-        </Container>
+        <ErrorState message="Could not load your dashboard data." onRetry={reload} />
       </Layout>
     );
   }
 
-  const latest = readings.length > 0 ? readings[0] : null;
-  const overallStatus = getSafeStatus(trend30?.status || 'no_data');
-
-  const distribution = ['controlled', 'elevated', 'high', 'low'].map((key) => {
-    const info = getSafeStatus(key);
-    return {
-      name: info.label,
-      value: readings.filter((r) => r?.status === key).length,
-      color: info.accent,
-    };
-  }).filter((d) => d.value > 0);
-
-  function daysAgo(dateStr) {
-    if (!dateStr) return '—';
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return '—';
-    const diffMs = Date.now() - date.getTime();
-    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    if (days <= 0) return 'Today';
-    if (days === 1) return '1 day ago';
-    return `${days} days ago`;
-  }
-
-  function formatDate(dateStr) {
-    if (!dateStr) return '';
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return '';
-    return date.toLocaleString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit'
-    });
-  }
+  const latest = readings[0] ?? null;
+  const unreadAlerts = alerts.filter((a) => !a.acknowledged).length;
 
   return (
     <Layout>
       <Container fluid className="px-0 py-3">
-        <div className="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-2">
-          <div>
-            <h2 className="hs-title mb-1">Dashboard</h2>
-            <p className="hs-subtitle mb-0">
-              Welcome back, {user?.full_name || 'there'}. Here's your latest health summary.
-            </p>
-          </div>
-          <Button className="btn-hs-primary d-flex align-items-center gap-2" onClick={() => navigate('/readings/new')}>
-            <Heart size={16} /> Log Reading
-          </Button>
-        </div>
+        <PageHeader
+          title="Dashboard"
+          subtitle={`Welcome back, ${user?.full_name || 'there'}. Here's your latest health summary.`}
+          action={
+            <Button className="btn-hs-primary d-flex align-items-center gap-2" onClick={() => navigate('/readings/new')}>
+              <Heart size={16} /> Log reading
+            </Button>
+          }
+        />
 
         <Row className="g-3 mb-4">
           <Col md={3} sm={6}>
-            <div className="hs-stat-card border p-3 rounded">
-              <div className="hs-stat-label d-flex justify-content-between align-items-center">
-                <span>Latest Reading</span>
-                <Activity size={16} color="#94A3B8" />
-              </div>
-              <div className="hs-stat-value h3 mb-1 mt-2">
-                {latest ? `${latest.systolic}/${latest.diastolic}` : '—'}
-              </div>
-              <div className="hs-stat-sub text-muted small">
-                {latest ? daysAgo(latest.recorded_at) : 'No readings yet'}
-              </div>
-            </div>
+            <StatCard
+              label="Latest reading"
+              icon={Activity}
+              value={latest ? `${latest.systolic}/${latest.diastolic}` : '—'}
+              sub={latest ? relativeDays(latest.recorded_at) : 'No readings yet'}
+            />
           </Col>
-
           <Col md={3} sm={6}>
-            <div className="hs-stat-card border p-3 rounded">
-              <div className="hs-stat-label d-flex justify-content-between align-items-center">
-                <span>30-Day Average</span>
-                <Heart size={16} color="#94A3B8" />
-              </div>
-              <div className="hs-stat-value h3 mb-1 mt-2">
-                {trend30?.avg_systolic ? `${Math.round(trend30.avg_systolic)}/${Math.round(trend30.avg_diastolic)}` : '—'}
-              </div>
-              <div className="hs-stat-sub text-muted small">
-                Based on {trend30?.reading_count || 0} readings
-              </div>
-            </div>
+            <StatCard
+              label={`${TREND_WINDOW_DAYS}-day average`}
+              icon={Heart}
+              value={trend?.avg_systolic ? `${Math.round(trend.avg_systolic)}/${Math.round(trend.avg_diastolic)}` : '—'}
+              sub={`Based on ${trend?.reading_count || 0} readings`}
+            />
           </Col>
-
           <Col md={3} sm={6}>
-            <div className="hs-stat-card border p-3 rounded">
-              <div className="hs-stat-label d-flex justify-content-between align-items-center">
-                <span>Status</span>
-                <TrendingUp size={16} color="#94A3B8" />
-              </div>
+            <StatCard label="Status" icon={TrendingUp}>
               <div className="mt-2">
-                <Badge style={{ backgroundColor: overallStatus.bg, color: overallStatus.text, fontWeight: 600, padding: '0.4rem 0.8rem', borderRadius: '20px' }}>
-                  {overallStatus.label}
-                </Badge>
+                <StatusPill status={trend?.status || 'no_data'} />
               </div>
-            </div>
+            </StatCard>
           </Col>
-
           <Col md={3} sm={6}>
-            <div className="hs-stat-card border p-3 rounded">
-              <div className="hs-stat-label d-flex justify-content-between align-items-center">
-                <span>Unread Alerts</span>
-                <Bell size={16} color="#94A3B8" />
-              </div>
-              <div className="hs-stat-value ">{unreadAlerts}</div>
-            </div>
+            <StatCard label="Unread alerts" icon={Bell} value={unreadAlerts} />
           </Col>
         </Row>
 
         <Row className="g-3">
           <Col lg={7}>
-            <div className="hs-panel border p-3 rounded">
-              <div className="d-flex justify-content-between align-items-start mb-3">
-                <div>
-                  <h5 className="hs-title mb-1">Recent Readings</h5>
-                  <p className="hs-subtitle mb-0 text-muted" style={{ fontSize: '0.88rem' }}>Your latest blood pressure logs.</p>
-                </div>
-                <Button variant="link" className="d-flex align-items-center gap-1 p-0 text-decoration-none" style={{ color: 'var(--hs-teal, #0d9488)', fontWeight: 600, fontSize: '0.9rem' }} onClick={() => navigate('/readings')}>
-                  View All <ArrowRight size={14} />
+            <Panel
+              title="Recent readings"
+              description="Your latest blood pressure logs."
+              action={
+                <Button variant="link" className="hs-link d-flex align-items-center gap-1 p-0 text-decoration-none" onClick={() => navigate('/readings')}>
+                  View all <ArrowRight size={14} />
                 </Button>
-              </div>
-
+              }
+            >
               {readings.length === 0 ? (
-                <p className="hs-subtitle text-muted">No readings logged yet.</p>
+                <p className="hs-subtitle mb-0">No readings logged yet.</p>
               ) : (
-                readings.slice(0, 5).map((r, idx) => {
-                  const s = getSafeStatus(r.status);
+                readings.slice(0, RECENT_LIMIT).map((reading) => {
+                  const info = statusInfo(reading.status);
                   return (
-                    <div key={r.reading_id || idx} className="hs-reading-row d-flex justify-content-between align-items-center py-2 border-bottom">
-                      <div className="d-flex align-items-center gap-2">
-                        <div className="hs-reading-row-accent" style={{ width: '4px', height: '32px', backgroundColor: s.accent, borderRadius: '2px' }} />
-                        <div>
-                          <div style={{ fontWeight: 700, color: 'var(--hs-navy, #0f172a)' }}>
-                            {r.systolic}/{r.diastolic} <span style={{ fontWeight: 400, fontSize: '0.85rem', color: '#94A3B8' }}>mmHg</span>
-                          </div>
-                          <div style={{ fontSize: '0.8rem', color: '#94A3B8' }}>
-                            {formatDate(r.recorded_at)}
-                          </div>
-                        </div>
+                    <DataRow
+                      key={reading.reading_id}
+                      accent={info.accent}
+                      trailing={<StatusPill status={reading.status} />}
+                    >
+                      <div className="hs-reading-value">
+                        {reading.systolic}/{reading.diastolic} <span className="hs-reading-unit">mmHg</span>
                       </div>
-                      <Badge style={{ backgroundColor: s.bg, color: s.text, fontWeight: 600, padding: '0.35rem 0.7rem', borderRadius: '20px' }}>
-                        {s.label}
-                      </Badge>
-                    </div>
+                      <div className="hs-reading-meta">{formatDateTime(reading.recorded_at)}</div>
+                    </DataRow>
                   );
                 })
               )}
-            </div>
+            </Panel>
           </Col>
 
           <Col lg={5}>
-            <div className="hs-panel border p-3 rounded h-100">
-              <h5 className="hs-title mb-1">Reading Distribution</h5>
-              <p className="hs-subtitle mb-3 text-muted" style={{ fontSize: '0.88rem' }}>Breakdown of your readings by classification.</p>
-
+            <Panel
+              title="Reading distribution"
+              description="Breakdown of your readings by classification."
+              className="h-100"
+            >
               {distribution.length === 0 ? (
-                <p className="hs-subtitle text-muted">No data to display yet.</p>
+                <p className="hs-subtitle mb-0">No data to display yet.</p>
               ) : (
-                <div style={{ position: 'relative', width: '100%', height: '260px' }}>
+                <div style={{ position: 'relative', width: '100%', height: 260 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie
-                        data={distribution}
-                        dataKey="value"
-                        innerRadius={70}
-                        outerRadius={100}
-                        paddingAngle={2}
-                      >
-                        {distribution.map((entry, i) => (
-                          <Cell key={i} fill={entry.color} />
+                      <Pie data={distribution} dataKey="value" innerRadius={70} outerRadius={100} paddingAngle={2}>
+                        {distribution.map((entry) => (
+                          <Cell key={entry.name} fill={entry.color} />
                         ))}
                       </Pie>
                       <Tooltip />
                     </PieChart>
                   </ResponsiveContainer>
-                  <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', pointerEvents: 'none' }}>
-                    <div style={{ fontSize: '1.8rem', fontWeight: 700, color: 'var(--hs-navy, #0f172a)' }}>{readings.length}</div>
-                    <div style={{ fontSize: '0.8rem', color: '#94A3B8' }}>Total</div>
+                  <div className="hs-donut-centre">
+                    <div className="hs-donut-total">{readings.length}</div>
+                    <div className="hs-reading-meta justify-content-center">Total</div>
                   </div>
                 </div>
               )}
-            </div>
+            </Panel>
           </Col>
         </Row>
-        {recommendations.length > 0 && (
-          <div className="hs-panel mt-3">
-            <div className="d-flex align-items-center gap-2 mb-3">
-              <Lightbulb size={18} color="var(--hs-teal)" />
-              <h5 className="hs-title mb-0">Recommendations for you</h5>
-            </div>
 
+        {(loadingRecs || recommendations.length > 0) && (
+          <Panel
+            className="mt-3"
+            title={
+              <span className="d-flex align-items-center gap-2">
+                <Lightbulb size={18} color="var(--hs-teal)" /> Recommendations for you
+              </span>
+            }
+          >
             {loadingRecs ? (
-              <div className="text-center py-3"><Spinner animation="border" size="sm" style={{ color: 'var(--hs-teal)' }} /></div>
+              <Loader size="sm" className="py-3" />
             ) : (
-              recommendations.map((rec) => {
-                const trendColor = rec.based_on_trend ? statusInfo(rec.based_on_trend) : null;
-                return (
-                  <div
-                    key={rec.recommendation_id}
-                    className="hs-reading-row"
-                    style={{ justifyContent: 'flex-start', alignItems: 'flex-start' }}
-                  >
-                    <div
-                      className="hs-reading-row-accent"
-                      style={{ backgroundColor: trendColor ? trendColor.accent : '#94A3B8', marginTop: 2 }}
-                    />
-                    <div style={{ fontSize: '0.9rem', color: 'var(--hs-navy)', lineHeight: 1.5 }}>
-                      {rec.message}
-                    </div>
-                  </div>
-                );
-              })
+              recommendations.map((rec) => (
+                <DataRow
+                  key={rec.recommendation_id}
+                  align="start"
+                  accent={rec.based_on_trend ? statusInfo(rec.based_on_trend).accent : '#94A3B8'}
+                >
+                  <div className="hs-body-text">{rec.message}</div>
+                </DataRow>
+              ))
             )}
-          </div>
+          </Panel>
         )}
       </Container>
     </Layout>

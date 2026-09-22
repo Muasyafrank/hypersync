@@ -1,13 +1,13 @@
 import apiClient from './client';
 
 export async function createFactor(payload) {
-  const response = await apiClient.post('/factors/', payload);
-  return response.data;
+  const { data } = await apiClient.post('/factors', payload);
+  return data;
 }
 
 export async function getMyFactors() {
-  const response = await apiClient.get('/factors/me');
-  return response.data;
+  const { data } = await apiClient.get('/factors/me');
+  return data;
 }
 
 export async function deleteFactor(factorId) {

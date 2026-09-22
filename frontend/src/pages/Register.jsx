@@ -1,17 +1,24 @@
 import { useState } from 'react';
-import { Container, Card, Form, Button, Alert, Row, Col } from 'react-bootstrap';
-import { useNavigate, Link } from 'react-router-dom';
-import { registerUser, loginUser, getCurrentUser } from '../api/auth';
+import { Alert, Button, Col, Form, Row } from 'react-bootstrap';
+import { Link, useNavigate } from 'react-router-dom';
+import AuthCard from '../components/AuthCard';
+import PasswordInput from '../components/PasswordInput';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useForm } from '../hooks/useForm';
+import { getCurrentUser, loginUser, registerUser } from '../api/auth';
 import { setTokens } from '../api/tokenStorage';
-import PasswordInput from '../components/PasswordInput';
+import { errorMessage } from '../utils/format';
+
+const MIN_PASSWORD_LENGTH = 8;
+const SEX_OPTIONS = ['Male', 'Female', 'Other'];
+
 export default function Register() {
   const navigate = useNavigate();
   const { login } = useAuth();
   const toast = useToast();
 
-  const [form, setForm] = useState({
+  const { values, handleChange } = useForm({
     full_name: '',
     email: '',
     password: '',
@@ -19,120 +26,97 @@ export default function Register() {
     sex: '',
   });
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  function handleChange(e) {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  }
-
-  async function handleSubmit(e) {
-    e.preventDefault();
+  async function handleSubmit(event) {
+    event.preventDefault();
     setError('');
-    setLoading(true);
+    setSubmitting(true);
 
     try {
-      const payload = {
-        full_name: form.full_name,
-        email: form.email,
-        password: form.password,
-        date_of_birth: form.date_of_birth || null,
-        sex: form.sex || null,
-      };
+      await registerUser({
+        full_name: values.full_name.trim(),
+        email: values.email.trim(),
+        password: values.password,
+        date_of_birth: values.date_of_birth || null,
+        sex: values.sex || null,
+      });
 
-      await registerUser(payload);
-
-      const tokenData = await loginUser({ email: form.email, password: form.password });
-      setTokens(tokenData);
-      const userData = await getCurrentUser();
-      login(tokenData, userData);
+      // Log straight in so the patient lands on their dashboard.
+      const tokens = await loginUser({ email: values.email.trim(), password: values.password });
+      setTokens(tokens);
+      const user = await getCurrentUser();
+      login(tokens, user);
       toast.success('Account created successfully!');
-      navigate('/dashboard');
+      navigate('/dashboard', { replace: true });
     } catch (err) {
-      const detail = err.response?.data?.detail;
-      const message = typeof detail === 'string' ? detail : 'Registration failed. Please check your details.';
-      toast.error(message);
+      const message = errorMessage(err, 'Registration failed. Please check your details.');
       setError(message);
+      toast.error(message);
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   }
 
   return (
-    <div className="hs-auth-wrapper d-flex align-items-center justify-content-center py-5">
-      <Container style={{ maxWidth: '480px' }}>
-        <div className="hs-brand">
-          <div className="hs-brand-icon">H</div>
-          <span className="hs-brand-name">HyperSync</span>
-        </div>
+    <AuthCard
+      title="Create your account"
+      subtitle="Start tracking your blood pressure at home"
+      maxWidth={480}
+      footer={<>Already have an account? <Link to="/login" className="hs-link">Log in</Link></>}
+    >
+      {error && <Alert variant="danger" role="alert">{error}</Alert>}
 
-        <Card className="hs-auth-card p-4">
-          <Card.Body>
-            <h4 className="hs-title mb-1 text-center">Create your account</h4>
-            <p className="hs-subtitle text-center mb-4">Start tracking your blood pressure at home</p>
+      <Form onSubmit={handleSubmit} noValidate>
+        <Form.Group className="mb-3" controlId="register-name">
+          <Form.Label className="hs-form-label">Full name</Form.Label>
+          <Form.Control name="full_name" value={values.full_name} onChange={handleChange} autoComplete="name" required />
+        </Form.Group>
 
-            {error && <Alert variant="danger">{error}</Alert>}
+        <Form.Group className="mb-3" controlId="register-email">
+          <Form.Label className="hs-form-label">Email</Form.Label>
+          <Form.Control type="email" name="email" value={values.email} onChange={handleChange} autoComplete="email" required />
+        </Form.Group>
 
-            <Form onSubmit={handleSubmit}>
-              <Form.Group className="mb-3">
-                <Form.Label className="hs-form-label">Full Name</Form.Label>
-                <Form.Control
-                  type="text"
-                  name="full_name"
-                  value={form.full_name}
-                  onChange={handleChange}
-                  required
-                />
-              </Form.Group>
+        <Form.Group className="mb-3" controlId="register-password">
+          <Form.Label className="hs-form-label">Password</Form.Label>
+          <PasswordInput
+            value={values.password}
+            onChange={handleChange}
+            minLength={MIN_PASSWORD_LENGTH}
+            autoComplete="new-password"
+            required
+          />
+          <Form.Text className="text-muted">At least {MIN_PASSWORD_LENGTH} characters.</Form.Text>
+        </Form.Group>
 
-              <Form.Group className="mb-3">
-                <Form.Label className="hs-form-label">Email</Form.Label>
-                <Form.Control
-                  type="email"
-                  name="email"
-                  value={form.email}
-                  onChange={handleChange}
-                  required
-                />
-              </Form.Group>
+        <Row className="mb-4">
+          <Col>
+            <Form.Label className="hs-form-label" htmlFor="register-dob">Date of birth</Form.Label>
+            <Form.Control
+              id="register-dob"
+              type="date"
+              name="date_of_birth"
+              value={values.date_of_birth}
+              max={new Date().toISOString().slice(0, 10)}
+              onChange={handleChange}
+            />
+          </Col>
+          <Col>
+            <Form.Label className="hs-form-label" htmlFor="register-sex">Sex</Form.Label>
+            <Form.Select id="register-sex" name="sex" value={values.sex} onChange={handleChange}>
+              <option value="">Select…</option>
+              {SEX_OPTIONS.map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </Form.Select>
+          </Col>
+        </Row>
 
-              <Form.Group className="mb-3">
-                <Form.Label className="hs-form-label">Password</Form.Label>
-                <PasswordInput value={form.password} onChange={handleChange} minLength={8} required autoComplete="new-password" />
-                <Form.Text className="text-muted">At least 8 characters.</Form.Text>
-              </Form.Group>
-
-              <Row className="mb-3">
-                <Col>
-                  <Form.Label className="hs-form-label">Date of Birth</Form.Label>
-                  <Form.Control
-                    type="date"
-                    name="date_of_birth"
-                    value={form.date_of_birth}
-                    onChange={handleChange}
-                  />
-                </Col>
-                <Col>
-                  <Form.Label className="hs-form-label">Sex</Form.Label>
-                  <Form.Select name="sex" value={form.sex} onChange={handleChange}>
-                    <option value="">Select...</option>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                    <option value="Other">Other</option>
-                  </Form.Select>
-                </Col>
-              </Row>
-
-              <Button type="submit" className="btn-hs-primary w-100" disabled={loading}>
-                {loading ? 'Creating account...' : 'Register'}
-              </Button>
-            </Form>
-
-            <div className="text-center mt-4 hs-footer-text">
-              Already have an account? <Link to="/login" className="hs-link">Log in</Link>
-            </div>
-          </Card.Body>
-        </Card>
-      </Container>
-    </div>
+        <Button type="submit" className="btn-hs-primary w-100" disabled={submitting}>
+          {submitting ? 'Creating account…' : 'Register'}
+        </Button>
+      </Form>
+    </AuthCard>
   );
 }

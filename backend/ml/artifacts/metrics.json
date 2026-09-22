@@ -1,0 +1,30 @@
+{
+  "data_source": "Kenya STEPS NCD Risk Factor Survey 2015 (KNBS/MoH/WHO)",
+  "n_total": 4418,
+  "n_train": 3534,
+  "n_test": 884,
+  "class_distribution": {
+    "not_at_risk": 2616,
+    "at_risk": 1802
+  },
+  "cv_macro_f1_mean": 0.6191007530513147,
+  "cv_macro_f1_std": 0.010332790780824285,
+  "test_accuracy": 0.6334841628959276,
+  "test_macro_f1": 0.624054939516129,
+  "test_weighted_f1": 0.6349658979984674,
+  "test_roc_auc": 0.6665810394961944,
+  "confusion_matrix": [
+    [
+      350,
+      173
+    ],
+    [
+      151,
+      210
+    ]
+  ],
+  "confusion_matrix_labels": [
+    "not_at_risk",
+    "at_risk"
+  ]
+}

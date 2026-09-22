@@ -1,53 +1,55 @@
-import { useState, useEffect } from 'react';
-import { Container, Spinner } from 'react-bootstrap';
+import { Container } from 'react-bootstrap';
 import { Bell, CheckCircle2 } from 'lucide-react';
 import Layout from '../components/Layout';
+import { DataRow, EmptyState, ErrorState, Loader, PageHeader, Panel } from '../components/ui';
+import { useAsync } from '../hooks/useAsync';
 import { getMyAlerts } from '../api/alerts';
+import { formatDateTime } from '../utils/format';
+
+const HIGH_ACCENT = '#DC2626';
+const ELEVATED_ACCENT = '#CA8A04';
 
 export default function Alerts() {
-  const [alerts, setAlerts] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    getMyAlerts().then(setAlerts).finally(() => setLoading(false));
-  }, []);
+  const { data: alerts, loading, error, reload } = useAsync(getMyAlerts, [], []);
 
   return (
     <Layout>
       <Container fluid className="px-0" style={{ maxWidth: 760 }}>
-        <h2 className="hs-title mb-1">Alerts</h2>
-        <p className="hs-subtitle mb-4">Notifications raised when your blood pressure trend needs attention.</p>
+        <PageHeader
+          title="Alerts"
+          subtitle="Notifications raised when your blood pressure trend needs attention."
+        />
 
-        <div className="hs-panel">
+        <Panel>
           {loading ? (
-            <div className="text-center py-4"><Spinner animation="border" style={{ color: 'var(--hs-teal)' }} /></div>
+            <Loader />
+          ) : error ? (
+            <ErrorState message="Could not load your alerts." onRetry={reload} />
           ) : alerts.length === 0 ? (
-            <div className="text-center py-5">
-              <Bell size={28} color="#CBD5E1" className="mb-2" />
-              <p className="hs-subtitle mb-0">No alerts yet. You'll see one here if your trend becomes elevated or high.</p>
-            </div>
+            <EmptyState
+              icon={Bell}
+              message="No alerts yet. You'll see one here if your trend becomes elevated or high."
+            />
           ) : (
-            alerts.map((a) => (
-              <div key={a.alert_id} className="hs-reading-row" style={{ alignItems: 'flex-start' }}>
-                <div
-                  className="hs-reading-row-accent"
-                  style={{ backgroundColor: a.alert_type.includes('high') ? '#DC2626' : '#CA8A04', marginTop: 2 }}
-                />
-                <div className="flex-grow-1">
-                  <div style={{ fontSize: '0.9rem', color: 'var(--hs-navy)', lineHeight: 1.5 }}>{a.message}</div>
-                  <div style={{ fontSize: '0.78rem', color: '#94A3B8', marginTop: 4 }}>
-                    {new Date(a.created_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                  </div>
-                </div>
-                {a.acknowledged && (
-                  <span className="d-flex align-items-center gap-1" style={{ fontSize: '0.78rem', color: '#16A34A', fontWeight: 600 }}>
-                    <CheckCircle2 size={14} /> Reviewed
-                  </span>
-                )}
-              </div>
+            alerts.map((alert) => (
+              <DataRow
+                key={alert.alert_id}
+                align="start"
+                accent={alert.alert_type?.includes('high') ? HIGH_ACCENT : ELEVATED_ACCENT}
+                trailing={
+                  alert.acknowledged ? (
+                    <span className="hs-alert-reviewed">
+                      <CheckCircle2 size={14} /> Reviewed
+                    </span>
+                  ) : null
+                }
+              >
+                <div className="hs-body-text">{alert.message}</div>
+                <div className="hs-reading-meta mt-1">{formatDateTime(alert.created_at)}</div>
+              </DataRow>
             ))
           )}
-        </div>
+        </Panel>
       </Container>
     </Layout>
   );

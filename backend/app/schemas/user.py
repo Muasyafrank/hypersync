@@ -46,3 +46,19 @@ class PasswordReset(BaseModel):
     new_password: str = Field(min_length=8)
     
         
+
+class LatestReading(BaseModel):
+    systolic: int
+    diastolic: int
+    status: str
+    recorded_at: datetime
+
+
+class PatientSummaryOut(BaseModel):
+    """Row shown in the clinician's patient list."""
+
+    user_id: uuid.UUID
+    full_name: str
+    email: EmailStr
+    reading_count: int = 0
+    latest: LatestReading | None = None

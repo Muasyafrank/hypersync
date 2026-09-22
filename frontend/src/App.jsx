@@ -1,61 +1,97 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { lazy, Suspense } from 'react';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { ConfirmProvider } from './context/ConfirmContext';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import Dashboard from './pages/Dashboard';
-import ReadingsHistory from './pages/ReadingsHistory';
-import LogReading from './pages/LogReading';
-import Trend from './pages/Trend';
-import ClinicianDashboard from './pages/ClinicianDashboard';
-import ClinicianPatientDetail from './pages/ClinicianPatientDetail';
-import AdminDashboard from './pages/AdminDashboard';
-import Lifestyle from './pages/Lifestyle';
-import Alerts from './pages/Alerts';
-import ClinicianAlerts from './pages/ClinicianAlerts';
+import ErrorBoundary from './components/ErrorBoundary';
+import Loader from './components/ui/Loader';
+import { roleHome } from './utils/format';
+
+// Route-level code splitting: a patient never downloads the admin or
+// clinician screens, which keeps the initial bundle small.
+const Login = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const ReadingsHistory = lazy(() => import('./pages/ReadingsHistory'));
+const LogReading = lazy(() => import('./pages/LogReading'));
+const Trend = lazy(() => import('./pages/Trend'));
+const Lifestyle = lazy(() => import('./pages/Lifestyle'));
+const Alerts = lazy(() => import('./pages/Alerts'));
+const ClinicianDashboard = lazy(() => import('./pages/ClinicianDashboard'));
+const ClinicianPatientDetail = lazy(() => import('./pages/ClinicianPatientDetail'));
+const ClinicianAlerts = lazy(() => import('./pages/ClinicianAlerts'));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+
+const PATIENT = ['patient'];
+const CLINICIAN = ['clinician'];
+const ADMIN = ['admin'];
 
 function PrivateRoute({ children, allowedRoles }) {
   const { user, loading } = useAuth();
-  if (loading) return null;
+
+  if (loading) return <Loader className="py-5" label="Checking your session" />;
   if (!user) return <Navigate to="/login" replace />;
   if (allowedRoles && !allowedRoles.includes(user.role)) {
-    const fallback = user.role === 'admin' ? '/admin' : user.role === 'clinician' ? '/clinician' : '/dashboard';
-    return <Navigate to={fallback} replace />;
+    return <Navigate to={roleHome(user.role)} replace />;
   }
   return children;
 }
 
+/** Sends an already-authenticated user straight to their own home screen. */
+function PublicOnlyRoute({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) return <Loader className="py-5" label="Checking your session" />;
+  return user ? <Navigate to={roleHome(user.role)} replace /> : children;
+}
+
+function protectedRoute(path, element, allowedRoles) {
+  return (
+    <Route
+      key={path}
+      path={path}
+      element={<PrivateRoute allowedRoles={allowedRoles}>{element}</PrivateRoute>}
+    />
+  );
+}
+
 function AppRoutes() {
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
-      <Route path="/clinician" element={<PrivateRoute allowedRoles={['clinician']}><ClinicianDashboard /></PrivateRoute>} />
-      <Route path="/clinician/patients/:patientId" element={<PrivateRoute allowedRoles={['clinician']}><ClinicianPatientDetail /></PrivateRoute>} />
-      <Route path="/dashboard" element={<PrivateRoute allowedRoles={['patient']}><Dashboard /></PrivateRoute>} />
-      <Route path="/readings" element={<PrivateRoute allowedRoles={['patient']}><ReadingsHistory /></PrivateRoute>} />
-      <Route path="/readings/new" element={<PrivateRoute allowedRoles={['patient']}><LogReading /></PrivateRoute>} />
-      <Route path="/trend" element={<PrivateRoute allowedRoles={['patient']}><Trend /></PrivateRoute>} />
-      <Route path="/lifestyle" element={<PrivateRoute allowedRoles={['patient']}><Lifestyle /></PrivateRoute>} />
-      <Route path="/admin" element={<PrivateRoute allowedRoles={['admin']}><AdminDashboard /></PrivateRoute>} />
-      <Route path="/alerts" element={<PrivateRoute allowedRoles={['patient']}><Alerts /></PrivateRoute>} />
-<Route path="/clinician/alerts" element={<PrivateRoute allowedRoles={['clinician']}><ClinicianAlerts /></PrivateRoute>} />
-      <Route path="*" element={<Navigate to="/login" replace />} />
-    </Routes>
+    <Suspense fallback={<Loader className="py-5" />}>
+      <Routes>
+        <Route path="/login" element={<PublicOnlyRoute><Login /></PublicOnlyRoute>} />
+        <Route path="/register" element={<PublicOnlyRoute><Register /></PublicOnlyRoute>} />
+
+        {protectedRoute('/dashboard', <Dashboard />, PATIENT)}
+        {protectedRoute('/readings', <ReadingsHistory />, PATIENT)}
+        {protectedRoute('/readings/new', <LogReading />, PATIENT)}
+        {protectedRoute('/trend', <Trend />, PATIENT)}
+        {protectedRoute('/lifestyle', <Lifestyle />, PATIENT)}
+        {protectedRoute('/alerts', <Alerts />, PATIENT)}
+
+        {protectedRoute('/clinician', <ClinicianDashboard />, CLINICIAN)}
+        {protectedRoute('/clinician/patients/:patientId', <ClinicianPatientDetail />, CLINICIAN)}
+        {protectedRoute('/clinician/alerts', <ClinicianAlerts />, CLINICIAN)}
+
+        {protectedRoute('/admin', <AdminDashboard />, ADMIN)}
+
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    </Suspense>
   );
 }
 
 export default function App() {
   return (
-    <ToastProvider>
-      <ConfirmProvider>
-        <AuthProvider>
-          <BrowserRouter>
-            <AppRoutes />
-          </BrowserRouter>
-        </AuthProvider>
-      </ConfirmProvider>
-    </ToastProvider>
+    <ErrorBoundary>
+      <ToastProvider>
+        <ConfirmProvider>
+          <AuthProvider>
+            <BrowserRouter>
+              <AppRoutes />
+            </BrowserRouter>
+          </AuthProvider>
+        </ConfirmProvider>
+      </ToastProvider>
+    </ErrorBoundary>
   );
 }

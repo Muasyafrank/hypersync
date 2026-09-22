@@ -1,6 +1,6 @@
-import { createContext, useContext, useState, useEffect } from 'react';
-import { getCurrentUser } from '../api/auth';
-import { getAccessToken,getRefreshToken,setTokens,clearTokens} from '../api/tokenStorage'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { getCurrentUser, logoutUser } from '../api/auth';
+import { clearTokens, getAccessToken, getRefreshToken, setTokens } from '../api/tokenStorage';
 
 const AuthContext = createContext(null);
 
@@ -9,45 +9,44 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = getAccessToken();
-    if (!token) {
+    if (!getAccessToken()) {
       setLoading(false);
       return;
     }
+    let active = true;
     getCurrentUser()
-      .then(setUser)
-      .catch(() => {
-        clearTokens();
-      })
-      .finally(() => setLoading(false));
+      .then((data) => { if (active) setUser(data); })
+      .catch(() => { if (active) clearTokens(); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, []);
 
-  function login(tokenPair, userData) {
+  const login = useCallback((tokenPair, userData) => {
     setTokens(tokenPair);
     setUser(userData);
-  }
+  }, []);
 
-  async  function logout() {
+  const logout = useCallback(async () => {
     const refreshToken = getRefreshToken();
-    try{
-      if(refreshToken){
-        await logoutUser(refreshToken);
-      }
-    }catch{
-
-    }finally{
+    try {
+      // Best effort: revoke server-side, but always clear locally.
+      if (refreshToken) await logoutUser(refreshToken);
+    } catch {
+      /* the local session is cleared regardless */
+    } finally {
       clearTokens();
       setUser(null);
     }
-  }
+  }, []);
 
-  return (
-    <AuthContext.Provider value={{ user, login, logout, loading }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  // Memoised so consumers don't re-render on every provider render.
+  const value = useMemo(() => ({ user, login, logout, loading }), [user, login, logout, loading]);
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
-  return useContext(AuthContext);
+  const context = useContext(AuthContext);
+  if (context === null) throw new Error('useAuth must be used inside an <AuthProvider>');
+  return context;
 }

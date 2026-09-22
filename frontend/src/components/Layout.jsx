@@ -1,126 +1,110 @@
 import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Heart, LayoutGrid, LineChart, Activity, Bell, LogOut, Menu, X, Users, UserCog,AlertTriangle } from 'lucide-react';
+import {
+  Activity, AlertTriangle, Bell, Heart, LayoutGrid, LineChart, LogOut, Menu, UserCog, Users, X,
+} from 'lucide-react';
+import logoMark from '../assets/logo-mark.svg';
 import { useAuth } from '../context/AuthContext';
-import { useConfirm } from '../context/ConfirmContext'
+import { useConfirm } from '../context/ConfirmContext';
+import { roleHome } from '../utils/format';
+
+/** Nav entries per role, so the sidebar is data rather than nested ternaries. */
+const NAV_ITEMS = {
+  patient: [
+    { to: '/dashboard', label: 'Dashboard', icon: LayoutGrid },
+    { to: '/readings', label: 'Readings', icon: Heart },
+    { to: '/trend', label: 'Trends', icon: LineChart },
+    { to: '/lifestyle', label: 'Lifestyle', icon: Activity },
+    { to: '/alerts', label: 'Alerts', icon: Bell },
+  ],
+  clinician: [
+    { to: '/clinician', label: 'Patients', icon: Users },
+    { to: '/clinician/alerts', label: 'Alert queue', icon: AlertTriangle },
+  ],
+  admin: [
+    { to: '/admin', label: 'Admin', icon: UserCog },
+  ],
+};
+
+const linkClass = ({ isActive }) => `hs-sidebar-link${isActive ? ' active' : ''}`;
 
 export default function Layout({ children }) {
-    const { user, logout } = useAuth();
-    const navigate = useNavigate();
-    const [sidebarOpen, setSidebarOpen] = useState(false);
-    const confirm = useConfirm();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const confirm = useConfirm();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-    async function handleLogout() {
-        const confirmed = await confirm({
-            title: 'Log out?',
-            message: "You'll need to log back in to access your dashboard.",
-            confirmLabel: 'Log out',
-            cancelLabel: 'Stay logged in',
-            variant: 'primary',
-        });
-        if (confirmed) {
-            await logout();
-            navigate('/login')
-        }
-    }
+  const role = user?.role;
+  const items = NAV_ITEMS[role] ?? [];
+  const initial = user?.full_name?.charAt(0)?.toUpperCase() || '?';
 
-    function closeSidebar() {
-        setSidebarOpen(false);
-    }
+  const closeSidebar = () => setSidebarOpen(false);
 
-    const initial = user?.full_name?.charAt(0)?.toUpperCase() || '?';
-    const role = user?.role;
+  async function handleLogout() {
+    const confirmed = await confirm({
+      title: 'Log out?',
+      message: "You'll need to log back in to access your dashboard.",
+      confirmLabel: 'Log out',
+      cancelLabel: 'Stay logged in',
+      variant: 'primary',
+    });
+    if (!confirmed) return;
+    await logout();
+    navigate('/login', { replace: true });
+  }
 
-    return (
-        <div className="hs-app-shell" style={{ backgroundColor: 'var(--hs-bg)' }}>
-            <div className="hs-topbar">
-                <div className="d-flex align-items-center gap-2" style={{ fontWeight: 700, color: 'var(--hs-navy)' }}>
-                    <Heart size={20} fill="var(--hs-teal)" color="var(--hs-teal)" />
-                    HyperSync
-                </div>
-                <button
-                    onClick={() => setSidebarOpen(true)}
-                    style={{ background: 'none', border: 'none', color: 'var(--hs-navy)' }}
-                    aria-label="Open menu"
-                >
-                    <Menu size={24} />
-                </button>
-            </div>
+  return (
+    <div className="hs-app-shell">
+      <header className="hs-topbar">
+        <NavLink to={roleHome(role)} className="hs-topbar-brand">
+          <img src={logoMark} alt="" width={26} height={26} className="hs-brand-mark" />
+          HyperSync
+        </NavLink>
+        <button type="button" className="hs-icon-btn" onClick={() => setSidebarOpen(true)} aria-label="Open menu">
+          <Menu size={24} />
+        </button>
+      </header>
 
-            <div className={`hs-sidebar-backdrop${sidebarOpen ? ' open' : ''}`} onClick={closeSidebar} />
+      <div
+        className={`hs-sidebar-backdrop${sidebarOpen ? ' open' : ''}`}
+        onClick={closeSidebar}
+        aria-hidden="true"
+      />
 
-            <aside className={`hs-sidebar${sidebarOpen ? ' open' : ''}`}>
-                <div className="d-flex justify-content-between align-items-center">
-                    <div className="hs-sidebar-brand mb-0">
-                        <Heart size={22} fill="currentColor" />
-                        <span>HyperSync</span>
-                    </div>
-                    <button
-                        onClick={closeSidebar}
-                        className="d-lg-none"
-                        style={{ background: 'none', border: 'none', color: 'var(--hs-navy)' }}
-                        aria-label="Close menu"
-                    >
-                        <X size={20} />
-                    </button>
-                </div>
-
-                <nav className="hs-sidebar-nav">
-                    <NavLink to={role === 'clinician' ? '/clinician' : role === 'admin' ? '/admin' : '/dashboard'} onClick={closeSidebar} className={({ isActive }) => `hs-sidebar-link${isActive ? ' active' : ''}`}>
-                        <LayoutGrid size={18} /> Dashboard
-                    </NavLink>
-                    {role === 'patient' && (
-                        <>
-                            <NavLink to="/readings" onClick={closeSidebar} className={({ isActive }) => `hs-sidebar-link${isActive ? ' active' : ''}`}>
-                                <Heart size={18} /> Readings
-                            </NavLink>
-                            <NavLink to="/trend" onClick={closeSidebar} className={({ isActive }) => `hs-sidebar-link${isActive ? ' active' : ''}`}>
-                                <LineChart size={18} /> Trends
-                            </NavLink>
-                            <NavLink to="/lifestyle" onClick={closeSidebar} className={({ isActive }) => `hs-sidebar-link${isActive ? ' active' : ''}`}>
-                                <Activity size={18} /> Lifestyle
-                            </NavLink>
-                        </>
-                    )}
-
-                    {role === 'clinician' && (
-                        <NavLink to="/clinician" onClick={closeSidebar} className={({ isActive }) => `hs-sidebar-link${isActive ? ' active' : ''}`}>
-                            <Users size={18} /> Patients
-                        </NavLink>
-                    )}
-
-                    {role === 'admin' && (
-                        <NavLink to="/admin" onClick={closeSidebar} className={({ isActive }) => `hs-sidebar-link${isActive ? ' active' : ''}`}>
-                            <UserCog size={18} /> Admin
-                        </NavLink>
-                    )}
-
-                    {role === 'clinician' && (
-                        <NavLink to="/clinician/alerts" onClick={closeSidebar} className={({ isActive }) => `hs-sidebar-link${isActive ? ' active' : ''}`}>
-                            <AlertTriangle size={18} /> Alert Queue
-                        </NavLink>
-                    )}
-                </nav>
-
-                <div className="hs-sidebar-footer">
-                    <div className="hs-sidebar-user">
-                        <div className="hs-avatar">{initial}</div>
-                        <div>
-                            <div style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--hs-navy)' }}>
-                                {user?.full_name || '—'}
-                            </div>
-                            <div style={{ fontSize: '0.78rem', color: '#94A3B8', textTransform: 'capitalize' }}>
-                                {user?.role}
-                            </div>
-                        </div>
-                    </div>
-                    <button className="hs-sidebar-logout" onClick={handleLogout}>
-                        <LogOut size={16} /> Log out
-                    </button>
-                </div>
-            </aside>
-
-            <main className="hs-main">{children}</main>
+      <aside className={`hs-sidebar${sidebarOpen ? ' open' : ''}`}>
+        <div className="d-flex justify-content-between align-items-center">
+          <div className="hs-sidebar-brand mb-0">
+            <img src={logoMark} alt="" width={30} height={30} className="hs-brand-mark" />
+            <span>HyperSync</span>
+          </div>
+          <button type="button" onClick={closeSidebar} className="hs-icon-btn d-lg-none" aria-label="Close menu">
+            <X size={20} />
+          </button>
         </div>
-    );
+
+        <nav className="hs-sidebar-nav" aria-label="Main navigation">
+          {items.map(({ to, label, icon: Icon }) => (
+            <NavLink key={to} to={to} end onClick={closeSidebar} className={linkClass}>
+              <Icon size={18} /> {label}
+            </NavLink>
+          ))}
+        </nav>
+
+        <div className="hs-sidebar-footer">
+          <div className="hs-sidebar-user">
+            <div className="hs-avatar" aria-hidden="true">{initial}</div>
+            <div>
+              <div className="hs-sidebar-user-name">{user?.full_name || '—'}</div>
+              <div className="hs-sidebar-user-role">{role}</div>
+            </div>
+          </div>
+          <button type="button" className="hs-sidebar-logout" onClick={handleLogout}>
+            <LogOut size={16} /> Log out
+          </button>
+        </div>
+      </aside>
+
+      <main className="hs-main">{children}</main>
+    </div>
+  );
 }
