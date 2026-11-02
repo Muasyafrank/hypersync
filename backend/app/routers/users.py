@@ -1,5 +1,4 @@
 import uuid
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
@@ -31,7 +30,7 @@ def _get_user_or_404(db: Session, user_id: uuid.UUID) -> User:
     return user
 
 
-@router.get("", response_model=List[UserOut])
+@router.get("", response_model=list[UserOut])
 def list_users(
     role: UserRole | None = Query(default=None, description="Filter by role: patient, clinician or admin"),
     db: Session = Depends(get_db),
@@ -48,7 +47,7 @@ def list_users(
     return query.order_by(User.created_at.desc()).all()
 
 
-@router.get("/patients/summary", response_model=List[PatientSummaryOut])
+@router.get("/patients/summary", response_model=list[PatientSummaryOut])
 def list_patient_summaries(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_clinician),
@@ -59,12 +58,7 @@ def list_patient_summaries(
     history from the client, which was one request per patient plus the
     entire history transferred just to read the first row.
     """
-    patients = (
-        db.query(User)
-        .filter(User.role == UserRole.patient)
-        .order_by(User.created_at.desc())
-        .all()
-    )
+    patients = db.query(User).filter(User.role == UserRole.patient).order_by(User.created_at.desc()).all()
     if not patients:
         return []
 
@@ -149,9 +143,7 @@ def get_user(
             detail.date_of_birth = profile.date_of_birth
             detail.sex = profile.sex
         detail.reading_count = (
-            db.query(func.count(BPReading.reading_id))
-            .filter(BPReading.patient_id == user.user_id)
-            .scalar()
+            db.query(func.count(BPReading.reading_id)).filter(BPReading.patient_id == user.user_id).scalar()
         )
     return detail
 

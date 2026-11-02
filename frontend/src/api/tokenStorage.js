@@ -1,22 +1,32 @@
-const ACCESS_KEY = 'access_token'
-const REFRESH_KEY = 'refresh_token'
+/**
+ * Where the access token lives: in memory only.
+ *
+ * It is gone on reload and is not readable from storage, so a script injected
+ * into the page (XSS) cannot walk off with a long-lived credential. The
+ * long-lived refresh token is an httpOnly cookie managed by the browser and
+ * the API; the page never sees it. On load, AuthContext asks the API for a new
+ * access token using that cookie.
+ */
+let accessToken = null;
 
 export function getAccessToken() {
-    return localStorage.getItem(ACCESS_KEY)
+  return accessToken;
 }
 
-export function getRefreshToken() {
-    return localStorage.getItem(REFRESH_KEY)
-}
-
-export function setTokens({access_token,refresh_token}) {
-    if(access_token) localStorage.setItem(ACCESS_KEY,access_token);
-    if(refresh_token) localStorage.setItem(REFRESH_KEY,refresh_token)
-}
 export function setAccessToken(token) {
-    localStorage.setItem(ACCESS_KEY,token)
+  accessToken = token;
 }
-export function clearTokens(){
-    localStorage.removeItem(ACCESS_KEY)
-    localStorage.removeItem(REFRESH_KEY)
+
+export function clearAccessToken() {
+  accessToken = null;
+}
+
+/** Earlier versions kept both tokens in localStorage; remove any left behind. */
+export function purgeLegacyTokens() {
+  try {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+  } catch {
+    /* storage unavailable: nothing to purge */
+  }
 }

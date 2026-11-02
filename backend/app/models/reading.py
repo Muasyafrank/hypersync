@@ -1,9 +1,12 @@
 import uuid
-from sqlalchemy import Column, Integer, String,DateTime,ForeignKey
+
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship, backref
+from sqlalchemy.orm import backref, relationship
 from sqlalchemy.sql import func
+
 from app.core.database import Base
+
 
 class BPReading(Base):
     __tablename__ = "bp_readings"
@@ -12,8 +15,10 @@ class BPReading(Base):
     patient_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True)
     systolic = Column(Integer, nullable=False)
     diastolic = Column(Integer, nullable=False)
-    heart_rate = Column(Integer, nullable = False)
-    recorded_at = Column(DateTime(timezone = True), nullable=False,server_default=func.now())
+    # Optional: the API schema and the "Log reading" form both treat pulse as
+    # optional, so the column must accept NULL (see migration d4e8a1b6f203).
+    heart_rate = Column(Integer, nullable=True)
+    recorded_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     notes = Column(String, nullable=True)
 

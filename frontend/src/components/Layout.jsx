@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   Activity, AlertTriangle, Bell, Heart, LayoutGrid, LineChart, LogOut, Menu, UserCog, Users, X,
@@ -40,6 +40,16 @@ export default function Layout({ children }) {
 
   const closeSidebar = () => setSidebarOpen(false);
 
+  // Escape closes the mobile drawer, as keyboard users expect.
+  useEffect(() => {
+    if (!sidebarOpen) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setSidebarOpen(false);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [sidebarOpen]);
+
   async function handleLogout() {
     const confirmed = await confirm({
       title: 'Log out?',
@@ -55,6 +65,8 @@ export default function Layout({ children }) {
 
   return (
     <div className="hs-app-shell">
+      <a className="hs-skip-link" href="#main-content">Skip to main content</a>
+
       <header className="hs-topbar">
         <NavLink to={roleHome(role)} className="hs-topbar-brand">
           <img src={logoMark} alt="" width={26} height={26} className="hs-brand-mark" />
@@ -104,7 +116,7 @@ export default function Layout({ children }) {
         </div>
       </aside>
 
-      <main className="hs-main">{children}</main>
+      <main id="main-content" className="hs-main" tabIndex={-1}>{children}</main>
     </div>
   );
 }

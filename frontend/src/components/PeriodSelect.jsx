@@ -9,7 +9,7 @@ export default function PeriodSelect({ value, onChange, id = 'period-select' }) 
       <label className="visually-hidden" htmlFor={id}>Time period</label>
       <Form.Select
         id={id}
-        style={{ width: 'auto' }}
+        className="w-auto"
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
       >

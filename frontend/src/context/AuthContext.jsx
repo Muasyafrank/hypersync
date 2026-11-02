@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { getCurrentUser, logoutUser } from '../api/auth';
-import { clearTokens, getAccessToken, getRefreshToken, setTokens } from '../api/tokenStorage';
+import { getCurrentUser, loginUser, logoutUser } from '../api/auth';
+import { refreshSession } from '../api/client';
+import { clearAccessToken, purgeLegacyTokens, setAccessToken } from '../api/tokenStorage';
 
 const AuthContext = createContext(null);
 
@@ -8,39 +9,48 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Restore the session on first load. The access token only lives in memory,
+  // so a reload starts by trading the httpOnly refresh cookie for a new one.
   useEffect(() => {
-    if (!getAccessToken()) {
-      setLoading(false);
-      return;
-    }
+    purgeLegacyTokens();
     let active = true;
-    getCurrentUser()
+    refreshSession()
+      .then(() => getCurrentUser())
       .then((data) => { if (active) setUser(data); })
-      .catch(() => { if (active) clearTokens(); })
+      .catch(() => clearAccessToken()) // no valid session: stay logged out
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
 
-  const login = useCallback((tokenPair, userData) => {
-    setTokens(tokenPair);
-    setUser(userData);
+  /**
+   * Exchange credentials for a session. Used by both the login and the
+   * registration screens (which log the new patient straight in).
+   * Resolves with the signed-in user; rejects on bad credentials.
+   */
+  const signIn = useCallback(async ({ email, password }) => {
+    const { access_token: accessToken } = await loginUser({ email, password });
+    // Set before /auth/me so the request interceptor can attach it. (The API
+    // also set the refresh cookie on this response.)
+    setAccessToken(accessToken);
+    const currentUser = await getCurrentUser();
+    setUser(currentUser);
+    return currentUser;
   }, []);
 
   const logout = useCallback(async () => {
-    const refreshToken = getRefreshToken();
     try {
       // Best effort: revoke server-side, but always clear locally.
-      if (refreshToken) await logoutUser(refreshToken);
+      await logoutUser();
     } catch {
       /* the local session is cleared regardless */
     } finally {
-      clearTokens();
+      clearAccessToken();
       setUser(null);
     }
   }, []);
 
   // Memoised so consumers don't re-render on every provider render.
-  const value = useMemo(() => ({ user, login, logout, loading }), [user, login, logout, loading]);
+  const value = useMemo(() => ({ user, signIn, logout, loading }), [user, signIn, logout, loading]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

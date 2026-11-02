@@ -1,10 +1,10 @@
-import uuid
 import enum
+import uuid
 
-from sqlalchemy import Column, String, Enum, ForeignKey, Date, DateTime
+from sqlalchemy import Column, Date, DateTime, Enum, ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 
 from app.core.database import Base
 
@@ -24,35 +24,17 @@ class SexEnum(str, enum.Enum):
 class User(Base):
     __tablename__ = "users"
 
-    user_id = Column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4
-    )
+    user_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
-    role = Column(
-        Enum(UserRole),
-        nullable=True,
-        default=UserRole.patient
-    )
+    role = Column(Enum(UserRole), nullable=True, default=UserRole.patient)
 
     full_name = Column(String, nullable=False)
 
-    email = Column(
-        String,
-        unique=True,
-        nullable=False
-    )
+    email = Column(String, unique=True, nullable=False)
 
-    password_hash = Column(
-        String,
-        nullable=False
-    )
+    password_hash = Column(String, nullable=False)
 
-    created_at = Column(
-        DateTime(timezone=True),
-        server_default=func.now()
-    )
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     profile = relationship(
         "PatientProfile",
@@ -66,38 +48,14 @@ class User(Base):
 class PatientProfile(Base):
     __tablename__ = "patient_profiles"
 
-    profile_id = Column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4
-    )
+    profile_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
-    user_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey(
-            "users.user_id",
-            ondelete="CASCADE"
-        ),
-        nullable=False,
-        unique=True
-    )
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, unique=True)
 
-    date_of_birth = Column(
-        Date,
-        nullable=True
-    )
+    date_of_birth = Column(Date, nullable=True)
 
-    sex = Column(
-        Enum(SexEnum),
-        nullable=True
-    )
+    sex = Column(Enum(SexEnum), nullable=True)
 
-    created_at = Column(
-        DateTime(timezone=True),
-        server_default=func.now()
-    )
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    user = relationship(
-        "User",
-        back_populates="profile"
-    )
+    user = relationship("User", back_populates="profile")

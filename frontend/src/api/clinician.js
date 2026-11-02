@@ -10,11 +10,6 @@ export async function getPatientSummaries() {
   return data;
 }
 
-export async function getPatients() {
-  const { data } = await apiClient.get('/users', { params: { role: 'patient' } });
-  return data;
-}
-
 export async function getPatient(patientId) {
   const { data } = await apiClient.get(`/users/${patientId}`);
   return data;

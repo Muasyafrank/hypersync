@@ -1,14 +1,15 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Alert, Button, Container, Form } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import { Activity, HeartPulse, Info, Sparkles } from 'lucide-react';
 import Layout from '../components/Layout';
 import { PageHeader } from '../components/ui';
 import { useForm } from '../hooks/useForm';
+import { useSubmit } from '../hooks/useSubmit';
 import { useToast } from '../context/ToastContext';
 import { createReading } from '../api/readings';
 import { classifyBP, statusInfo, STATUS_NOTES } from '../utils/bpStatus';
-import { errorMessage, toLocalDateTimeInput } from '../utils/format';
+import { toLocalDateTimeInput } from '../utils/format';
 
 // Mirrors the Field(ge=…, le=…) constraints in backend/app/schemas/reading.py.
 const LIMITS = {
@@ -84,8 +85,27 @@ export default function LogReading() {
     recorded_at: toLocalDateTimeInput(),
     notes: '',
   });
-  const [error, setError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+
+  const { submit, submitting, error, setError } = useSubmit(
+    async () => {
+      const validationError = validate(values);
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+
+      const created = await createReading({
+        systolic: Number(values.systolic),
+        diastolic: Number(values.diastolic),
+        heart_rate: values.heart_rate ? Number(values.heart_rate) : null,
+        recorded_at: new Date(values.recorded_at).toISOString(),
+        notes: values.notes.trim() || null,
+      });
+      toast.success(`Reading saved — ${statusInfo(created.status).label} status recorded.`);
+      navigate('/readings');
+    },
+    { fallback: 'Could not save reading.', onError: (message) => toast.error(message) },
+  );
 
   const liveStatus = useMemo(
     () => classifyBP(Number(values.systolic) || null, Number(values.diastolic) || null),
@@ -93,40 +113,9 @@ export default function LogReading() {
   );
   const liveInfo = liveStatus ? statusInfo(liveStatus) : null;
 
-  async function handleSubmit(event) {
-    event.preventDefault();
-
-    const validationError = validate(values);
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-    setError('');
-    setSubmitting(true);
-
-    try {
-      const created = await createReading({
-        systolic: Number(values.systolic),
-        diastolic: Number(values.diastolic),
-        heart_rate: values.heart_rate ? Number(values.heart_rate) : null,
-        recorded_at: new Date(values.recorded_at).toISOString(),
-        notes: values.notes.trim() || null,
-        source: 'manual',
-      });
-      toast.success(`Reading saved — ${statusInfo(created.status).label} status recorded.`);
-      navigate('/readings');
-    } catch (err) {
-      const message = errorMessage(err, 'Could not save reading.');
-      setError(message);
-      toast.error(message);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
   return (
     <Layout>
-      <Container fluid className="px-0" style={{ maxWidth: 820 }}>
+      <Container fluid className="px-0 hs-page-wide">
         <PageHeader
           title="Log new reading"
           subtitle="Enter your latest blood pressure measurement."
@@ -146,7 +135,7 @@ export default function LogReading() {
 
             {error && <Alert variant="danger" role="alert">{error}</Alert>}
 
-            <Form onSubmit={handleSubmit} noValidate>
+            <Form onSubmit={submit} noValidate>
               <div className="row g-3 mb-3">
                 <div className="col-6">
                   <MeasurementInput

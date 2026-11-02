@@ -1,30 +1,100 @@
 {
   "data_source": "Kenya STEPS NCD Risk Factor Survey 2015 (KNBS/MoH/WHO)",
-  "n_total": 4418,
-  "n_train": 3534,
-  "n_test": 884,
-  "class_distribution": {
-    "not_at_risk": 2616,
-    "at_risk": 1802
-  },
-  "cv_macro_f1_mean": 0.6191007530513147,
-  "cv_macro_f1_std": 0.010332790780824285,
-  "test_accuracy": 0.6334841628959276,
-  "test_macro_f1": 0.624054939516129,
-  "test_weighted_f1": 0.6349658979984674,
-  "test_roc_auc": 0.6665810394961944,
-  "confusion_matrix": [
-    [
-      350,
-      173
-    ],
-    [
-      151,
-      210
-    ]
+  "feature_set": "current",
+  "features": [
+    "age",
+    "sex",
+    "smoked",
+    "alcohol_consumed",
+    "salt_score",
+    "activity_minutes",
+    "diet_adherence"
   ],
-  "confusion_matrix_labels": [
-    "not_at_risk",
-    "at_risk"
-  ]
+  "n_total": 4282,
+  "at_risk_share": 0.41686127977580567,
+  "cv_comparison": {
+    "logistic (deployed)": {
+      "auc_mean": 0.6564448938961023,
+      "auc_se": 0.004771862006929656,
+      "brier_mean": 0.22531518792640062
+    },
+    "random forest (v2)": {
+      "auc_mean": 0.6560867950653875,
+      "auc_se": 0.004917198694132533,
+      "brier_mean": 0.23132661483315775
+    },
+    "gradient boosting": {
+      "auc_mean": 0.6545285390575738,
+      "auc_se": 0.004342351845393704,
+      "brier_mean": 0.2264621796075818
+    }
+  },
+  "calibration": {
+    "mean_predicted": 0.41658410870096363,
+    "observed_rate": 0.41686127977580567,
+    "calibration_slope": 0.983101232006247,
+    "calibration_intercept": -0.004289218832919517,
+    "brier": 0.2252957683416458,
+    "oof_auc": 0.6546647012829961
+  },
+  "holdout": {
+    "threshold": 0.41693430656934305,
+    "auc": 0.629109243697479,
+    "sensitivity": 0.5742296918767507,
+    "specificity": 0.638,
+    "confusion_matrix": [
+      [
+        319,
+        181
+      ],
+      [
+        152,
+        205
+      ]
+    ]
+  },
+  "effects": {
+    "age": {
+      "odds_ratio": 1.5193718532603575,
+      "ci_low": 1.45139151310449,
+      "ci_high": 1.6007443240523826,
+      "unit": "per 10 years"
+    },
+    "sex": {
+      "odds_ratio": 0.9569108339415763,
+      "ci_low": 0.820231008744299,
+      "ci_high": 1.139568871307014,
+      "unit": "male vs female"
+    },
+    "salt_score": {
+      "odds_ratio": 0.9627848618384275,
+      "ci_low": 0.9077463146668037,
+      "ci_high": 1.0176068509765748,
+      "unit": "per +1 salt level (0-3)"
+    },
+    "alcohol_consumed": {
+      "odds_ratio": 1.4591232286775166,
+      "ci_low": 1.2084805781061818,
+      "ci_high": 1.7377927292253268,
+      "unit": "alcohol in last 30 days"
+    },
+    "activity_minutes": {
+      "odds_ratio": 0.9700397976311046,
+      "ci_low": 0.9466817991627304,
+      "ci_high": 0.9868376643695007,
+      "unit": "per 30 active min/day"
+    },
+    "diet_adherence": {
+      "odds_ratio": 1.0805350339921906,
+      "ci_low": 0.8512965813363437,
+      "ci_high": 1.3426883151068467,
+      "unit": "meets fruit/veg target"
+    },
+    "smoked": {
+      "odds_ratio": 0.8521269149432698,
+      "ci_low": 0.64473489176348,
+      "ci_high": 1.0883212895269303,
+      "unit": "currently smokes"
+    }
+  }
 }
