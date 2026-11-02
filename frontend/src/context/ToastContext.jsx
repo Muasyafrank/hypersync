@@ -1,6 +1,6 @@
-import { createContext, useContext, useState, useCallback } from 'react';
-import { ToastContainer, Toast } from 'react-bootstrap';
-import { CheckCircle2, XCircle, Info, AlertTriangle } from 'lucide-react';
+import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { Toast, ToastContainer } from 'react-bootstrap';
+import { AlertTriangle, CheckCircle2, Info, XCircle } from 'lucide-react';
 
 const ToastContext = createContext(null);
 
@@ -16,7 +16,7 @@ let idCounter = 0;
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
 
-  const showToast = useCallback((message, variant = 'success', duration = 4000) => {
+  const showToast = useCallback((message, variant, duration = 4000) => {
     const id = ++idCounter;
     setToasts((prev) => [...prev, { id, message, variant, duration }]);
     return id;
@@ -26,24 +26,34 @@ export function ToastProvider({ children }) {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  const toast = {
-    success: (msg, duration) => showToast(msg, 'success', duration),
-    error: (msg, duration) => showToast(msg, 'error', duration),
-    info: (msg, duration) => showToast(msg, 'info', duration),
-    warning: (msg, duration) => showToast(msg, 'warning', duration),
-  };
+  // Stable identity: consumers (and any effect that lists `toast` as a
+  // dependency) must not see a new object every time a toast is added.
+  const toast = useMemo(
+    () => ({
+      success: (message, duration) => showToast(message, 'success', duration),
+      error: (message, duration) => showToast(message, 'error', duration),
+      info: (message, duration) => showToast(message, 'info', duration),
+      warning: (message, duration) => showToast(message, 'warning', duration),
+    }),
+    [showToast],
+  );
 
   return (
     <ToastContext.Provider value={toast}>
       {children}
-      <ToastContainer position="top-end" className="p-3" style={{ position: 'fixed', zIndex: 2000 }}>
+      <ToastContainer position="top-end" className="p-3 hs-toast-container">
         {toasts.map((t) => (
-          <Toast key={t.id} onClose={() => removeToast(t.id)} delay={t.duration} autohide className="hs-toast">
+          <Toast
+            key={t.id}
+            onClose={() => removeToast(t.id)}
+            delay={t.duration}
+            autohide
+            className="hs-toast"
+            role={t.variant === 'error' ? 'alert' : 'status'}
+          >
             <Toast.Body className="d-flex align-items-center gap-2">
               {ICONS[t.variant]}
-              <span style={{ color: 'var(--hs-navy)', fontSize: '0.9rem', fontWeight: 500 }}>
-                {t.message}
-              </span>
+              <span className="hs-toast-text">{t.message}</span>
             </Toast.Body>
           </Toast>
         ))}
@@ -53,5 +63,7 @@ export function ToastProvider({ children }) {
 }
 
 export function useToast() {
-  return useContext(ToastContext);
+  const context = useContext(ToastContext);
+  if (context === null) throw new Error('useToast must be used inside a <ToastProvider>');
+  return context;
 }

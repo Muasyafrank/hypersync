@@ -6,13 +6,23 @@ import react from '@vitejs/plugin-react';
 const VENDOR_CHUNKS = {
   react: ['react', 'react-dom', 'react-router-dom'],
   charts: ['recharts', 'd3-'],
-  ui: ['react-bootstrap', 'lucide-react', '@restart'],
+  'vendor-ui': ['react-bootstrap', 'lucide-react', '@restart'],
 };
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
   server: { port: 5173 },
+  css: {
+    preprocessorOptions: {
+      // Bootstrap 5.3 still uses Sass features Dart Sass is deprecating
+      // (@import and friends). They work; keep the build output readable.
+      scss: {
+        quietDeps: true,
+        silenceDeprecations: ['import', 'global-builtin', 'color-functions', 'if-function'],
+      },
+    },
+  },
   build: {
     rollupOptions: {
       output: {

@@ -1,35 +1,43 @@
 import axios from 'axios';
-import { clearTokens, getAccessToken, getRefreshToken, setAccessToken } from './tokenStorage';
+import { clearAccessToken, getAccessToken, setAccessToken } from './tokenStorage';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+// Default to the page's own hostname. The refresh cookie is SameSite, and
+// "localhost" and "127.0.0.1" count as different sites, so the app and the API
+// have to be opened on the same one. Set VITE_API_BASE_URL for anything else.
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || `${window.location.protocol}//${window.location.hostname}:8000`;
+const TIMEOUT_MS = 20_000;
 const AUTH_PATHS = ['/auth/login', '/auth/register', '/auth/refresh'];
 
-const apiClient = axios.create({ baseURL: API_BASE_URL, timeout: 20_000 });
+// Sent with every request so the API groups readings by the user's own
+// calendar day rather than the UTC day.
+const TIME_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+const apiClient = axios.create({ baseURL: API_BASE_URL, timeout: TIMEOUT_MS, withCredentials: true });
 
 apiClient.interceptors.request.use((config) => {
   const token = getAccessToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
+  if (TIME_ZONE) config.headers['X-Timezone'] = TIME_ZONE;
   return config;
 });
 
 /**
- * Refresh coordination: while one refresh is in flight, other 401s wait for
- * its result instead of each firing their own refresh request.
+ * Refresh coordination: while one refresh is in flight, everything else that
+ * needs one (other 401s, or the page-load session restore) waits for its
+ * result instead of each firing its own request.
  */
 let refreshPromise = null;
 
-function redirectToLogin() {
-  clearTokens();
-  // Avoid a redirect loop if we are already sitting on the login screen.
-  if (!window.location.pathname.startsWith('/login')) {
-    window.location.assign('/login');
-  }
-}
-
-function refreshAccessToken(refreshToken) {
+/**
+ * Trade the httpOnly refresh cookie for a fresh access token and keep it in
+ * memory. Rejects (401) when there is no valid session.
+ */
+export function refreshSession() {
   if (!refreshPromise) {
+    // Bare axios: this call must not go through the 401 interceptor below.
     refreshPromise = axios
-      .post(`${API_BASE_URL}/auth/refresh`, { refresh_token: refreshToken })
+      .post(`${API_BASE_URL}/auth/refresh`, null, { withCredentials: true, timeout: TIMEOUT_MS })
       .then(({ data }) => {
         setAccessToken(data.access_token);
         return data.access_token;
@@ -39,6 +47,14 @@ function refreshAccessToken(refreshToken) {
       });
   }
   return refreshPromise;
+}
+
+function redirectToLogin() {
+  clearAccessToken();
+  // Avoid a redirect loop if we are already sitting on the login screen.
+  if (!window.location.pathname.startsWith('/login')) {
+    window.location.assign('/login');
+  }
 }
 
 apiClient.interceptors.response.use(
@@ -51,15 +67,9 @@ apiClient.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    const refreshToken = getRefreshToken();
-    if (!refreshToken) {
-      redirectToLogin();
-      return Promise.reject(error);
-    }
-
     request._retry = true;
     try {
-      const token = await refreshAccessToken(refreshToken);
+      const token = await refreshSession();
       request.headers.Authorization = `Bearer ${token}`;
       return apiClient(request);
     } catch (refreshError) {

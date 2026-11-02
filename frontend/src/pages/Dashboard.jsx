@@ -7,7 +7,7 @@ import Layout from '../components/Layout';
 import { DataRow, ErrorState, Loader, PageHeader, Panel, StatCard, StatusPill } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { useAsync } from '../hooks/useAsync';
-import { getMyReadings, getMyTrend } from '../api/readings';
+import { getMyReadings, getMyReadingSummary, getMyTrend } from '../api/readings';
 import { getMyRecommendations } from '../api/recommendations';
 import { getMyAlerts } from '../api/alerts';
 import { statusInfo } from '../utils/bpStatus';
@@ -17,7 +17,7 @@ const RECENT_LIMIT = 5;
 const TREND_WINDOW_DAYS = 30;
 const DISTRIBUTION_KEYS = ['controlled', 'elevated', 'high', 'low'];
 
-const EMPTY = { readings: [], trend: null, alerts: [] };
+const EMPTY = { readings: [], summary: { total: 0, status_counts: {} }, trend: null, alerts: [] };
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -26,12 +26,15 @@ export default function Dashboard() {
   // Core dashboard data: one combined load so the page renders in one pass.
   const { data, loading, error, reload } = useAsync(
     async () => {
-      const [readings, trend, alerts] = await Promise.all([
-        getMyReadings(),
+      // Only the handful of readings shown on screen are downloaded; the
+      // totals for the distribution chart come from a small server-side count.
+      const [readings, summary, trend, alerts] = await Promise.all([
+        getMyReadings({ limit: RECENT_LIMIT }),
+        getMyReadingSummary(),
         getMyTrend(TREND_WINDOW_DAYS),
         getMyAlerts().catch(() => []), // non-critical
       ]);
-      return { readings: readings ?? [], trend, alerts: alerts ?? [] };
+      return { readings: readings ?? [], summary, trend, alerts: alerts ?? [] };
     },
     [],
     EMPTY,
@@ -45,7 +48,7 @@ export default function Dashboard() {
     [],
   );
 
-  const { readings, trend, alerts } = data ?? EMPTY;
+  const { readings, summary, trend, alerts } = data ?? EMPTY;
 
   const distribution = useMemo(
     () =>
@@ -53,11 +56,11 @@ export default function Dashboard() {
         const info = statusInfo(key);
         return {
           name: info.label,
-          value: readings.filter((r) => r?.status === key).length,
+          value: summary.status_counts?.[key] ?? 0,
           color: info.accent,
         };
       }).filter((entry) => entry.value > 0),
-    [readings],
+    [summary],
   );
 
   if (loading) return <Layout><Loader className="py-5" /></Layout>;
@@ -129,7 +132,7 @@ export default function Dashboard() {
               {readings.length === 0 ? (
                 <p className="hs-subtitle mb-0">No readings logged yet.</p>
               ) : (
-                readings.slice(0, RECENT_LIMIT).map((reading) => {
+                readings.map((reading) => {
                   const info = statusInfo(reading.status);
                   return (
                     <DataRow
@@ -157,10 +160,10 @@ export default function Dashboard() {
               {distribution.length === 0 ? (
                 <p className="hs-subtitle mb-0">No data to display yet.</p>
               ) : (
-                <div style={{ position: 'relative', width: '100%', height: 260 }}>
+                <div className="hs-donut">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={distribution} dataKey="value" innerRadius={70} outerRadius={100} paddingAngle={2}>
+                      <Pie data={distribution} dataKey="value" innerRadius={70} outerRadius={100} paddingAngle={distribution.length > 1 ? 2 : 0}>
                         {distribution.map((entry) => (
                           <Cell key={entry.name} fill={entry.color} />
                         ))}
@@ -169,7 +172,7 @@ export default function Dashboard() {
                     </PieChart>
                   </ResponsiveContainer>
                   <div className="hs-donut-centre">
-                    <div className="hs-donut-total">{readings.length}</div>
+                    <div className="hs-donut-total">{summary.total}</div>
                     <div className="hs-reading-meta justify-content-center">Total</div>
                   </div>
                 </div>

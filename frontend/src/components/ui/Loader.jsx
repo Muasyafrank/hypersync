@@ -4,7 +4,7 @@ import { Spinner } from 'react-bootstrap';
 export default function Loader({ size, className = 'py-4', label = 'Loading' }) {
   return (
     <div className={`text-center ${className}`}>
-      <Spinner animation="border" size={size} role="status" style={{ color: 'var(--hs-teal)' }}>
+      <Spinner animation="border" size={size} role="status" className="hs-spinner">
         <span className="visually-hidden">{label}</span>
       </Spinner>
     </div>

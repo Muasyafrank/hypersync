@@ -1,42 +1,30 @@
-"""
-Kenya STEPS 2015 -> HyperSync feature pipeline.
-
-DATA SOURCE
------------
-Kenya National Bureau of Statistics, Ministry of Health (Kenya), World
-Health Organization. Kenya STEPwise Survey for Non-Communicable Disease
-Risk Factors, 2015. n=4500 respondents aged 18-69, nationally
-representative, three-stage cluster sample (NASSEP V frame).
-
-WHAT THIS SURVEY DOES AND DOES NOT COVER
------------------------------------------
-Covered directly: blood pressure (3 measured readings), smoking, alcohol
-use, salt-related behaviour, physical activity (work/transport/sport),
-fruit & vegetable intake, and — for respondents previously diagnosed with
-hypertension — antihypertensive medication adherence in the last two
-weeks.
-
-NOT covered: sleep duration, caffeine intake, perceived stress. These are
-HyperSync app features with no equivalent STEPS question. They are
-therefore excluded from the trained model entirely (rather than imputed
-with fabricated values) and handled separately in the application as
-plainly-labelled threshold rules — see app/core/ml_recommendation_engine.py.
-
-This is a cross-sectional survey: it captures association between
-lifestyle and blood pressure at a single point in time, not causation or
-within-person change over time. Framed in the recommendation output as
-"associated with" rather than "causes".
-"""
 import numpy as np
 import pandas as pd
 import pyreadstat
 
+# Features the app can supply today (age/sex from the profile, the rest from
+# the Lifestyle log).
 FEATURE_COLUMNS = [
-    "age", "sex", "smoked", "alcohol_consumed", "salt_score",
-    "activity_minutes", "diet_adherence",
+    "age",
+    "sex",
+    "smoked",
+    "alcohol_consumed",
+    "salt_score",
+    "activity_minutes",
+    "diet_adherence",
 ]
-# medication_taken is intentionally excluded from FEATURE_COLUMNS — see
-# note in build_dataset() below.
+
+# Adding body-mass index is the single biggest accuracy gain available
+# (see ml/README.md). Use it once the app collects height and weight:
+#   python -m ml.train_model --features bmi
+BMI_FEATURE_COLUMNS = FEATURE_COLUMNS + ["bmi"]
+
+# STEPS stores "not measured / refused" as 0 or 888.8 in the body measurements.
+PLAUSIBLE_RANGES = {
+    "height_cm": (120, 220),
+    "weight_kg": (25, 250),
+    "pulse": (35, 200),
+}
 
 
 def load_raw(path: str):
@@ -50,21 +38,13 @@ def _yes_no(series: pd.Series) -> pd.Series:
 
 
 def _salt_score(series: pd.Series) -> pd.Series:
-    """
-    D5: frequency of adding salt to food.
-    1 every meal .. 5 never, 77 don't know.
-    Recoded to an ascending 0-3 salt-exposure score (0=never, 3=every meal).
-    """
+
     mapping = {1.0: 3, 2.0: 2, 3.0: 1, 4.0: 1, 5.0: 0}
     return series.map(mapping)
 
 
 def _activity_minutes_per_day(df: pd.DataFrame) -> pd.Series:
-    """
-    Combines GPAQ-style work, transport, and sport activity blocks into an
-    average minutes-per-day figure, matching the unit HyperSync's
-    physical_activity_minutes field already uses.
-    """
+
     def block_minutes(does_col, days_col, hours_col, mins_col):
         does = df[does_col].map({1.0: 1, 2.0: 0}).fillna(0)
         days = df[days_col].fillna(0)
@@ -83,21 +63,26 @@ def _activity_minutes_per_day(df: pd.DataFrame) -> pd.Series:
 
 
 def _diet_adherence(df: pd.DataFrame) -> pd.Series:
-    """
-    WHO 5-a-day threshold: combined fruit + vegetable servings/day >= 5,
-    approximated as (days/week consuming * servings when consumed) / 7.
-    """
+
     fruit_daily = (df["D1"].fillna(0) * df["D2"].fillna(0)) / 7.0
     veg_daily = (df["D3"].fillna(0) * df["D4"].fillna(0)) / 7.0
     total = fruit_daily + veg_daily
     return (total >= 5).astype(int)
 
 
+def _in_range(series: pd.Series, low: float, high: float) -> pd.Series:
+    """NaN for anything outside a physiologically plausible range."""
+    return series.where(series.between(low, high))
+
+
+def _avg_pulse(df: pd.DataFrame) -> pd.Series:
+    cols = [df[c] for c in ("M16a", "M16b", "M16c")]
+    readings = pd.concat([_in_range(c, *PLAUSIBLE_RANGES["pulse"]) for c in cols], axis=1)
+    return readings.mean(axis=1, skipna=True)
+
+
 def _avg_bp(df: pd.DataFrame):
-    """
-    WHO STEPS convention: average the 2nd and 3rd readings (1st is a
-    settling reading). Falls back to whatever readings are present.
-    """
+
     sys_cols = ["M5a", "M6a"]
     dia_cols = ["M5b", "M6b"]
     systolic = df[sys_cols].mean(axis=1, skipna=True)
@@ -142,10 +127,18 @@ def build_dataset(path: str) -> pd.DataFrame:
     # It is retained here for descriptive purposes only and handled as a
     # plain rule in the app, same treatment as sleep/caffeine/stress.
 
+    # Body measurements, kept out of FEATURE_COLUMNS until the app collects them.
+    height = _in_range(df["M11"], *PLAUSIBLE_RANGES["height_cm"])
+    weight = _in_range(df["M12"], *PLAUSIBLE_RANGES["weight_kg"])
+    out["bmi"] = _in_range(weight / (height / 100) ** 2, 12, 60)
+    out["pulse"] = _avg_pulse(df)
+    # Pregnancy changes both BP and weight; the training script excludes it.
+    out["pregnant"] = df["M8"].map({1.0: 1, 2.0: 0})
+
     systolic, diastolic = _avg_bp(df)
     out["systolic"] = systolic
     out["diastolic"] = diastolic
-    out["bp_status"] = [classify_bp(s, d) for s, d in zip(systolic, diastolic)]
+    out["bp_status"] = [classify_bp(s, d) for s, d in zip(systolic, diastolic, strict=True)]
 
     before = len(out)
     out = out.dropna(subset=["age", "sex", "bp_status", "systolic", "diastolic"])
@@ -154,7 +147,9 @@ def build_dataset(path: str) -> pd.DataFrame:
     # same bounds HyperSync's own BPReadingCreate schema enforces at intake
     out = out[out["systolic"].between(60, 260) & out["diastolic"].between(30, 180)]
     after = len(out)
-    print(f"Dropped {before - after} rows with missing core fields, out-of-range age, or implausible BP; {after} remain.")
+    print(
+        f"Dropped {before - after} rows with missing core fields, out-of-range age, or implausible BP; {after} remain."
+    )
 
     return out.reset_index(drop=True)
 

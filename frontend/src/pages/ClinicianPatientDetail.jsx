@@ -11,7 +11,7 @@ import { getPatient, getPatientFactors, getPatientReadings, getPatientTrend } fr
 import { statusInfo } from '../utils/bpStatus';
 import { formatDateTime, formatFullDate } from '../utils/format';
 
-const EMPTY = { patient: null, readings: [], trend: null, factors: [] };
+const EMPTY = { patient: null, readings: [], factors: [] };
 
 /** One lifestyle entry's tags, skipping anything the patient didn't log. */
 function factorTags(factor) {
@@ -28,22 +28,31 @@ export default function ClinicianPatientDetail() {
   const navigate = useNavigate();
   const [periodDays, setPeriodDays] = useState(30);
 
+  // The patient's record: loaded once per patient.
   const { data, loading, error, reload } = useAsync(
     async () => {
       // Fetched by id rather than by listing every patient and filtering.
-      const [patient, readings, trend, factors] = await Promise.all([
+      const [patient, readings, factors] = await Promise.all([
         getPatient(patientId),
         getPatientReadings(patientId),
-        getPatientTrend(patientId, periodDays),
         getPatientFactors(patientId).catch(() => []),
       ]);
-      return { patient, readings, trend, factors };
+      return { patient, readings, factors };
     },
-    [patientId, periodDays],
+    [patientId],
     EMPTY,
   );
 
-  const { patient, readings, trend, factors } = data ?? EMPTY;
+  // The trend is its own request, so changing the period refetches only this
+  // chart instead of reloading the whole page (and the patient's full history).
+  const {
+    data: trend,
+    loading: trendLoading,
+    error: trendError,
+    reload: reloadTrend,
+  } = useAsync(() => getPatientTrend(patientId, periodDays), [patientId, periodDays]);
+
+  const { patient, readings, factors } = data ?? EMPTY;
 
   if (loading) return <Layout><Loader className="py-5" /></Layout>;
   if (error) {
@@ -68,7 +77,11 @@ export default function ClinicianPatientDetail() {
           className="mb-4"
           action={<PeriodSelect value={periodDays} onChange={setPeriodDays} />}
         >
-          {trend?.daily_breakdown?.length ? (
+          {trendLoading ? (
+            <Loader />
+          ) : trendError ? (
+            <ErrorState message="Could not load the trend for this period." onRetry={reloadTrend} />
+          ) : trend?.daily_breakdown?.length ? (
             <BPTrendChart dailyBreakdown={trend.daily_breakdown} height={380} animate={false} />
           ) : (
             <EmptyState message="No readings in this period." />
@@ -104,7 +117,7 @@ export default function ClinicianPatientDetail() {
           ) : (
             factors.map((factor) => (
               <DataRow key={factor.factor_id}>
-                <div className="hs-reading-value" style={{ fontSize: '0.9rem' }}>
+                <div className="hs-reading-value hs-reading-value-sm">
                   {formatFullDate(factor.logged_date)}
                 </div>
                 <div className="d-flex gap-3 mt-1 flex-wrap hs-factor-tags">

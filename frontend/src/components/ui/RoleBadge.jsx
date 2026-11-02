@@ -1,3 +1,4 @@
+import { capitalize } from '../../utils/format';
 import StatusPill from './StatusPill';
 
 const ROLE_COLORS = {
@@ -13,7 +14,7 @@ export default function RoleBadge({ role }) {
     <StatusPill
       size="sm"
       colors={ROLE_COLORS[role] || FALLBACK}
-      label={role ? role.charAt(0).toUpperCase() + role.slice(1) : 'Unknown'}
+      label={capitalize(role) || 'Unknown'}
     />
   );
 }

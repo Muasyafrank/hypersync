@@ -1,5 +1,6 @@
+import sys
+import os
 
-import sys, os
 sys.path.append(os.getcwd())
 
 import getpass
@@ -39,7 +40,7 @@ def main():
         db.commit()
         db.refresh(admin)
 
-        print(f"\nAdmin account created successfully:")
+        print("\nAdmin account created successfully:")
         print(f"  Name:  {admin.full_name}")
         print(f"  Email: {admin.email}")
     finally:

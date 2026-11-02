@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -25,10 +25,17 @@ class BPReadingCreate(BaseModel):
         if v is None:
             return None
         # Treat a naive datetime as UTC rather than crashing on the comparison.
-        reference = v if v.tzinfo else v.replace(tzinfo=timezone.utc)
-        if reference > datetime.now(timezone.utc):
+        reference = v if v.tzinfo else v.replace(tzinfo=UTC)
+        if reference > datetime.now(UTC):
             raise ValueError("Reading date/time cannot be in the future")
         return v
+
+
+class ReadingSummary(BaseModel):
+    """Totals across ALL of a patient's readings, without sending them."""
+
+    total: int
+    status_counts: dict[str, int]
 
 
 class BPReadingOut(BaseModel):

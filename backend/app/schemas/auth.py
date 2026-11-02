@@ -1,15 +1,15 @@
 from pydantic import BaseModel
 
-class TokenPair(BaseModel):
-    access_token: str
-    refresh_token: str
-    token_type: str = "bearer"
 
 class AccessTokenOnly(BaseModel):
-    access_token:str
-    token_type : str = "bearer"
+    """What login and refresh return. The refresh token never appears in a body:
+    it is set as an httpOnly cookie, out of reach of page scripts."""
+
+    access_token: str
+    token_type: str = "bearer"
+
 
 class RefreshRequest(BaseModel):
+    """Fallback for non-browser clients that cannot hold the cookie."""
+
     refresh_token: str
-class TokenData(BaseModel):
-    user_id: str | None = None

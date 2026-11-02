@@ -1,18 +1,54 @@
-from datetime import datetime, timedelta, timezone
 from collections import defaultdict
-from sqlalchemy.orm import Session
-from app.models.reading import BPReading
-from app.core.bp_classification import classify_bp
-from app.schemas.trend import TrendSummary, DailyAverage
+from datetime import UTC, date, datetime, timedelta, tzinfo
 
-def compute_trend(db:Session,patient_id,period_days: int = 7) -> TrendSummary:
-    cutoff = datetime.now(timezone.utc) - timedelta(days=period_days)
-    readings = (
-        db.query(BPReading)
-        .filter(BPReading.patient_id == patient_id, BPReading.recorded_at >= cutoff)
-        .order_by(BPReading.recorded_at.asc())
-        .all()
+from sqlalchemy.orm import Session
+
+from app.core.bp_classification import NO_DATA, classify_bp
+from app.models.reading import BPReading
+from app.schemas.trend import DailyAverage, TrendSummary
+
+
+def latest_reading_time(db: Session, patient_id) -> datetime | None:
+    """Timestamp of the patient's most recent reading, or None."""
+    row = (
+        db.query(BPReading.recorded_at)
+        .filter(BPReading.patient_id == patient_id)
+        .order_by(BPReading.recorded_at.desc())
+        .first()
     )
+    return row[0] if row else None
+
+
+def local_day(moment: datetime, tz: tzinfo = UTC) -> date:
+    """The calendar day `moment` falls on for someone in `tz`.
+
+    Database drivers differ on whether they hand back aware datetimes; a naive
+    one is stored UTC by convention, so it is treated as such.
+    """
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=UTC)
+    return moment.astimezone(tz).date()
+
+
+def compute_trend(
+    db: Session, patient_id, period_days: int = 7, end: datetime | None = None, tz: tzinfo = UTC
+) -> TrendSummary:
+    """Summarise the `period_days` ending at `end`.
+
+    With no `end` the window is "the last N days" and has no upper bound, so a
+    reading stamped slightly in the future (clock skew) is still counted. An
+    explicit `end` is used to describe an older stretch of readings.
+    """
+    cutoff = (end or datetime.now(UTC)) - timedelta(days=period_days)
+    query = db.query(BPReading).filter(BPReading.patient_id == patient_id, BPReading.recorded_at >= cutoff)
+    if end is not None:
+        query = query.filter(BPReading.recorded_at <= end)
+    readings = query.order_by(BPReading.recorded_at.asc()).all()
+    return summarize_readings(readings, period_days, tz)
+
+
+def summarize_readings(readings, period_days: int, tz: tzinfo = UTC) -> TrendSummary:
+    """Average the readings overall and per day, with days taken in `tz`."""
     if not readings:
         return TrendSummary(
             period_days=period_days,
@@ -20,7 +56,7 @@ def compute_trend(db:Session,patient_id,period_days: int = 7) -> TrendSummary:
             avg_systolic=None,
             avg_diastolic=None,
             avg_heart_rate=None,
-            status="no_data",
+            status=NO_DATA,
             daily_breakdown=[],
         )
     avg_systolic = sum(r.systolic for r in readings) / len(readings)
@@ -32,9 +68,7 @@ def compute_trend(db:Session,patient_id,period_days: int = 7) -> TrendSummary:
 
     by_day = defaultdict(list)
     for r in readings:
-        day = r.recorded_at.date()
-        by_day[day].append(r)
-
+        by_day[local_day(r.recorded_at, tz)].append(r)
 
     daily_breakdown = []
     for day in sorted(by_day.keys()):
@@ -56,8 +90,7 @@ def compute_trend(db:Session,patient_id,period_days: int = 7) -> TrendSummary:
         reading_count=len(readings),
         avg_systolic=round(avg_systolic, 1),
         avg_diastolic=round(avg_diastolic, 1),
-        avg_heart_rate=round(avg_heart_rate, 1) if avg_heart_rate else None,
+        avg_heart_rate=round(avg_heart_rate, 1) if avg_heart_rate is not None else None,
         status=overall_status,
         daily_breakdown=daily_breakdown,
-    )   
-
+    )

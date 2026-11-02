@@ -990,95 +990,83 @@ button.hs-reading-row {
   background-color: var(--hs-surface-hover);
 }
 
-.hs-choice-btn {
-  flex: 1;
-  min-height: 116px;
-  border: 1px solid var(--hs-border);
-  border-radius: var(--hs-radius-md);
-  background-color: var(--hs-surface);
+/* Lifestyle wizard: plain radio-button rows and a number field — no
+   icons. Rows stay large (min-height) so they're still easy to tap. */
+
+.hs-choice-list {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
   gap: 10px;
-  cursor: pointer;
-  transition: background-color 0.12s ease, border-color 0.12s ease;
 }
 
-.hs-choice-btn:hover {
-  background-color: var(--hs-surface-hover);
-}
-
-.hs-choice-btn.selected {
-  background-color: var(--hs-teal-tint);
-  border-color: var(--hs-teal);
-}
-
-.hs-choice-icon-wrap {
-  position: relative;
-  width: 52px;
-  height: 52px;
+.hs-choice-row {
   display: flex;
   align-items: center;
-  justify-content: center;
-}
-
-.hs-choice-badge {
-  position: absolute;
-  bottom: -4px;
-  right: -4px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-}
-
-.hs-choice-label {
-  font-weight: 600;
-  font-size: 0.95rem;
-  color: var(--hs-navy);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.hs-tally-btn {
-  width: 100%;
+  gap: 14px;
+  min-height: 56px;
+  padding: 0.85rem 1.1rem;
   border: 1px solid var(--hs-border);
   border-radius: var(--hs-radius-md);
   background-color: var(--hs-surface);
-  padding: 0.85rem 0.5rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--hs-navy);
   cursor: pointer;
   transition: background-color 0.12s ease, border-color 0.12s ease;
 }
 
-.hs-tally-btn:hover {
+.hs-choice-row:hover {
   background-color: var(--hs-surface-hover);
 }
 
-.hs-tally-btn.selected {
+.hs-choice-row.selected {
   background-color: var(--hs-teal-tint);
   border-color: var(--hs-teal);
   color: var(--hs-teal-dark);
 }
 
-.hs-tally-symbols {
-  font-size: 1.3rem;
-  letter-spacing: 2px;
-  min-height: 1.6rem;
+.hs-choice-row input[type='radio'] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--hs-teal);
+  flex-shrink: 0;
 }
 
-.hs-tally-label {
+.hs-number-field {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--hs-border);
+  border-radius: var(--hs-radius-md);
+  background-color: var(--hs-surface);
+  padding: 0.85rem 1.1rem;
+}
+
+.hs-number-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 1.4rem;
   font-weight: 600;
-  font-size: 0.85rem;
   color: var(--hs-navy);
+  padding: 0;
+  min-width: 0;
+}
+
+.hs-number-input:focus {
+  outline: none;
+}
+
+.hs-number-input::-webkit-outer-spin-button,
+.hs-number-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.hs-number-unit {
+  font-size: 0.95rem;
+  color: var(--hs-text-faint);
+  flex-shrink: 0;
 }
 
 .hs-nav-btn {
@@ -1150,3 +1138,78 @@ button.hs-reading-row {
     transition-duration: 0.01ms !important;
   }
 }
+
+
+/* =====================================================================
+   Component helpers
+   Classes that replace what used to be inline style={{ … }} props.
+   (Inline styles are kept only where the value is data-driven.)
+   ===================================================================== */
+
+/* Page width caps */
+.hs-page-narrow { max-width: 640px; }
+.hs-page-medium { max-width: 760px; }
+.hs-page-wide { max-width: 820px; }
+.hs-error-boundary { max-width: 520px; }
+
+/* Loading spinner in the accent colour */
+.hs-spinner { color: var(--hs-teal); }
+
+/* Password show/hide toggle sits flush with the input's border */
+.hs-password-toggle { border-color: var(--hs-border); }
+
+/* Rows whose content starts at the top (multi-line alerts, recommendations) */
+.hs-reading-row.hs-align-start,
+.hs-align-start .hs-reading-row-main { align-items: flex-start; }
+
+.hs-reading-value-sm { font-size: 0.9rem; }
+
+/* Donut chart wrapper: the centre label is positioned against this box */
+.hs-donut { position: relative; width: 100%; height: 260px; }
+
+/* Toasts */
+.toast-container.hs-toast-container { position: fixed; z-index: 2000; }
+.hs-toast-text { color: var(--hs-navy); font-size: 0.9rem; font-weight: 500; }
+
+/* Confirm dialog icon */
+.hs-confirm-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.hs-confirm-icon-danger { background-color: #FEE2E2; color: var(--hs-danger); }
+.hs-confirm-icon-primary { background-color: rgba(13, 148, 136, 0.1); color: var(--hs-teal); }
+
+/* Skip link: invisible until a keyboard user tabs to it */
+.hs-skip-link {
+  position: absolute;
+  left: 0.75rem;
+  top: -4rem;
+  z-index: 3000;
+  padding: 0.5rem 0.9rem;
+  background-color: var(--hs-navy);
+  color: #FFFFFF;
+  border-radius: var(--hs-radius-md);
+  text-decoration: none;
+  transition: top 0.12s ease;
+}
+.hs-skip-link:focus { top: 0.75rem; color: #FFFFFF; }
+.hs-main:focus { outline: none; }
+
+/* Lifestyle wizard: review screen */
+.hs-review-list { margin: 0; }
+.hs-review-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 0.15rem;
+  border-bottom: 1px solid var(--hs-border);
+}
+.hs-review-row:last-child { border-bottom: none; }
+.hs-review-row dt { font-weight: 400; color: var(--hs-text-muted); }
+.hs-review-row dd { margin: 0; font-weight: 600; color: var(--hs-navy); text-align: right; }
+.hs-review-row dd.hs-review-skipped { font-weight: 400; color: var(--hs-text-faint); }

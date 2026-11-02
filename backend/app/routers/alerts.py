@@ -1,5 +1,4 @@
 import uuid
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session, joinedload
@@ -24,7 +23,7 @@ def _alerts_query(db: Session):
     return db.query(Alert).options(joinedload(Alert.patient)).order_by(Alert.created_at.desc())
 
 
-@router.get("/me", response_model=List[AlertOut])
+@router.get("/me", response_model=list[AlertOut])
 def get_my_alerts(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_patient),
@@ -33,7 +32,7 @@ def get_my_alerts(
     return [_to_out(a) for a in alerts]
 
 
-@router.get("", response_model=List[AlertOut])
+@router.get("", response_model=list[AlertOut])
 def get_all_alerts(
     unacknowledged_only: bool = Query(default=True),
     db: Session = Depends(get_db),
@@ -45,7 +44,7 @@ def get_all_alerts(
     return [_to_out(a) for a in query.all()]
 
 
-@router.get("/patient/{patient_id}", response_model=List[AlertOut])
+@router.get("/patient/{patient_id}", response_model=list[AlertOut])
 def get_patient_alerts(
     patient_id: uuid.UUID,
     db: Session = Depends(get_db),
