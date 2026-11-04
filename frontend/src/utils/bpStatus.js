@@ -43,3 +43,14 @@ export const STATUS_NOTES = {
   controlled: 'This reading is within a healthy, controlled range.',
   low: 'This reading is on the low side. Note how you feel alongside it.',
 };
+
+/**
+ * Emphasis colours for things that need attention. Slightly darker than the
+ * status accents so text and thin bars stay readable on white.
+ */
+export const ALERT_ACCENTS = { high: '#DC2626', elevated: '#CA8A04' };
+
+/** Accent for an alert row; alert types look like "high_trend" / "elevated_trend". */
+export function alertAccent(alertType) {
+  return alertType?.includes('high') ? ALERT_ACCENTS.high : ALERT_ACCENTS.elevated;
+}

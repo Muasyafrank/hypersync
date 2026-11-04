@@ -17,7 +17,7 @@ export default class ErrorBoundary extends Component {
   render() {
     if (!this.state.hasError) return this.props.children;
     return (
-      <Container className="py-5 text-center" style={{ maxWidth: 520 }}>
+      <Container className="py-5 text-center hs-error-boundary">
         <AlertTriangle size={32} color="#DC2626" className="mb-3" />
         <h4 className="hs-title mb-2">Something went wrong</h4>
         <p className="hs-subtitle mb-4">

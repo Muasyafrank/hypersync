@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -10,6 +10,10 @@ class BPReadingCreate(BaseModel):
     heart_rate: int | None = Field(default=None, ge=30, le=220, description="Heart rate in bpm (30-220)")
     recorded_at: datetime | None = None
     notes: str | None = Field(default=None, max_length=1000)
+    rested_before: bool | None = Field(default=None, description="Sat quietly for about 5 minutes first")
+    stimulant_before: bool | None = Field(
+        default=None, description="Coffee/tea, smoking or exercise in the 30 minutes before"
+    )
 
     @field_validator("diastolic")
     @classmethod
@@ -25,10 +29,17 @@ class BPReadingCreate(BaseModel):
         if v is None:
             return None
         # Treat a naive datetime as UTC rather than crashing on the comparison.
-        reference = v if v.tzinfo else v.replace(tzinfo=timezone.utc)
-        if reference > datetime.now(timezone.utc):
+        reference = v if v.tzinfo else v.replace(tzinfo=UTC)
+        if reference > datetime.now(UTC):
             raise ValueError("Reading date/time cannot be in the future")
         return v
+
+
+class ReadingSummary(BaseModel):
+    """Totals across ALL of a patient's readings, without sending them."""
+
+    total: int
+    status_counts: dict[str, int]
 
 
 class BPReadingOut(BaseModel):
@@ -42,3 +53,5 @@ class BPReadingOut(BaseModel):
     recorded_at: datetime
     status: str
     notes: str | None = None
+    rested_before: bool | None = None
+    stimulant_before: bool | None = None

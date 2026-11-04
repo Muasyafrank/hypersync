@@ -1,6 +1,8 @@
 import uuid
+from datetime import UTC, tzinfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
@@ -18,7 +20,7 @@ CREDENTIALS_ERROR = HTTPException(
 )
 
 
-def _parse_uuid(value: str | None) -> uuid.UUID | None:
+def parse_uuid(value: str | None) -> uuid.UUID | None:
     """Parse a UUID from an untrusted token claim without raising."""
     if not value:
         return None
@@ -36,11 +38,11 @@ def get_current_user(
     if payload is None:
         raise CREDENTIALS_ERROR
 
-    user_id = _parse_uuid(payload.get("sub"))
+    user_id = parse_uuid(payload.get("sub"))
     if user_id is None:
         raise CREDENTIALS_ERROR
 
-    jti = _parse_uuid(payload.get("jti"))
+    jti = parse_uuid(payload.get("jti"))
     if jti and db.query(BlacklistedToken.jti).filter(BlacklistedToken.jti == jti).first():
         raise CREDENTIALS_ERROR
 
@@ -73,3 +75,18 @@ require_patient = require_role("patient")
 require_clinician = require_role("clinician")
 require_admin = require_role("admin")
 require_staff = require_role("clinician", "admin")
+
+
+def get_timezone(x_timezone: str | None = Header(default=None)) -> tzinfo:
+    """The caller's timezone, from the `X-Timezone` header (an IANA name such as
+    "Africa/Nairobi"), so readings are grouped by the user's own calendar day.
+
+    Anything missing or unrecognised quietly falls back to UTC rather than
+    failing a request over a display preference.
+    """
+    if x_timezone:
+        try:
+            return ZoneInfo(x_timezone)
+        except (ZoneInfoNotFoundError, ValueError, OSError):
+            pass
+    return UTC

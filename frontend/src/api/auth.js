@@ -15,13 +15,9 @@ export async function loginUser({ email, password }) {
   return data;
 }
 
-export async function refreshAccessToken(refreshToken) {
-  const { data } = await apiClient.post('/auth/refresh', { refresh_token: refreshToken });
-  return data;
-}
-
-export async function logoutUser(refreshToken) {
-  await apiClient.post('/auth/logout', { refresh_token: refreshToken });
+/** Revokes the session server-side; the API reads the refresh cookie itself. */
+export async function logoutUser() {
+  await apiClient.post('/auth/logout');
 }
 
 export async function getCurrentUser() {

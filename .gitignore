@@ -31,3 +31,8 @@ npm-debug.log*
 .DS_Store
 .vscode/
 .idea/
+
+# Tool caches and generated output
+.pytest_cache/
+.ruff_cache/
+demo_out/

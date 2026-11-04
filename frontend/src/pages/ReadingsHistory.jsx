@@ -2,6 +2,7 @@ import { Button, Container } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import { Calendar, HeartPulse, Plus, Trash2 } from 'lucide-react';
 import Layout from '../components/Layout';
+import ReadingConditions from '../components/ReadingConditions';
 import { DataRow, EmptyState, ErrorState, Loader, PageHeader, Panel, StatusPill } from '../components/ui';
 import { useAsync } from '../hooks/useAsync';
 import { useToast } from '../context/ToastContext';
@@ -89,6 +90,7 @@ export default function ReadingsHistory() {
                 <div className="hs-reading-meta">
                   <Calendar size={13} /> {formatDateTime(reading.recorded_at)}
                 </div>
+                <ReadingConditions reading={reading} />
               </DataRow>
             ))
           )}

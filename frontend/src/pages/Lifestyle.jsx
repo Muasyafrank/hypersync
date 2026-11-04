@@ -1,40 +1,18 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Container } from 'react-bootstrap';
 import {
-  ArrowLeft, ArrowRight, Check, Coffee, Cigarette, Droplet, Footprints,
-  ListChecks, Moon, Pill, PlusCircle, Utensils, Volume2, Wine,
+  ArrowLeft, ArrowRight, Check, ListChecks, PlusCircle, Volume2,
 } from 'lucide-react';
 import Layout from '../components/Layout';
 import WizardStep from '../components/lifestyle/WizardStep';
 import FactorEntryRow from '../components/lifestyle/FactorEntryRow';
+import { buildFactorPayload, STEPS } from '../components/lifestyle/steps';
 import { EmptyState, ErrorState, Loader, Panel } from '../components/ui';
 import { useAsync } from '../hooks/useAsync';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { createFactor, deleteFactor, getMyFactors } from '../api/factors';
-import { errorMessage } from '../utils/format';
-
-const DAY_MS = 86_400_000;
-
-/**
- * Guided daily check-in. Deliberately one question per screen with large
- * targets and a read-aloud button — many users are older or low-literacy.
- */
-const STEPS = [
-  { key: 'when', question: 'When is this for?', type: 'when' },
-  { key: 'stress_level', question: 'How do you feel today?', type: 'face' },
-  { key: 'sleep_hours', question: 'How did you sleep?', type: 'tally', icon: Moon, map: [null, 4, 6, 8] },
-  { key: 'salt_intake', question: 'How much salt did you eat?', type: 'tally', icon: Droplet, map: ['none', 'low', 'moderate', 'high'] },
-  { key: 'caffeine_intake', question: 'How much coffee or tea did you drink?', type: 'tally', icon: Coffee, map: ['none', 'low', 'moderate', 'high'] },
-  { key: 'alcohol_consumed', question: 'Did you drink alcohol?', type: 'bool', icon: Wine },
-  { key: 'smoked', question: 'Did you smoke?', type: 'bool', icon: Cigarette },
-  { key: 'physical_activity_minutes', question: 'How much did you move or walk today?', type: 'tally', icon: Footprints, map: [0, 15, 30, 60] },
-  { key: 'diet_adherence', question: 'Did you eat as your clinic advised?', type: 'bool', icon: Utensils },
-  { key: 'medication_taken', question: 'Did you take your medicine?', type: 'bool', icon: Pill },
-  { key: 'review', question: 'Save this entry?', type: 'review' },
-];
-
-const FACTOR_KEYS = STEPS.map((step) => step.key).filter((key) => key !== 'when' && key !== 'review');
+import { errorMessage, toLocalDateInput } from '../utils/format';
 
 function speak(text) {
   if (!('speechSynthesis' in window)) return;
@@ -44,6 +22,13 @@ function speak(text) {
   window.speechSynthesis.speak(utterance);
 }
 
+/**
+ * Guided daily check-in: one question per screen, form controls only
+ * (radio buttons, a plain number field) — no icons to interpret. One
+ * question at a time with large tap targets and a read-aloud button, since
+ * that part of the design (built for older/low-literacy users) wasn't the
+ * problem. The questions themselves live in components/lifestyle/steps.js.
+ */
 export default function Lifestyle() {
   const toast = useToast();
   const confirm = useConfirm();
@@ -82,10 +67,11 @@ export default function Lifestyle() {
   async function handleSave() {
     setSaving(true);
     try {
-      const loggedDate = answers.when === 'yesterday' ? new Date(Date.now() - DAY_MS) : new Date();
-      const payload = Object.fromEntries(FACTOR_KEYS.map((key) => [key, answers[key] ?? null]));
+      // The user's own calendar day (not UTC, which lags Kenya by 3 hours).
+      const loggedDate = new Date();
+      if (answers.when === 'yesterday') loggedDate.setDate(loggedDate.getDate() - 1);
 
-      await createFactor({ ...payload, logged_date: loggedDate.toISOString().slice(0, 10) });
+      await createFactor({ ...buildFactorPayload(answers), logged_date: toLocalDateInput(loggedDate) });
       toast.success('Saved!');
       resetWizard();
       await reload();
@@ -117,7 +103,7 @@ export default function Lifestyle() {
 
   return (
     <Layout>
-      <Container fluid className="px-0" style={{ maxWidth: 640 }}>
+      <Container fluid className="px-0 hs-page-narrow">
         <div className="d-flex gap-3 mb-4" role="tablist">
           <button
             type="button"
@@ -166,10 +152,9 @@ export default function Lifestyle() {
             <div className="d-flex justify-content-between align-items-center mt-4">
               <button
                 type="button"
-                className="hs-nav-btn"
+                className={`hs-nav-btn${stepIndex === 0 ? ' invisible' : ''}`}
                 onClick={goBack}
                 disabled={stepIndex === 0}
-                style={{ visibility: stepIndex === 0 ? 'hidden' : 'visible' }}
                 aria-label="Previous question"
               >
                 <ArrowLeft size={22} />

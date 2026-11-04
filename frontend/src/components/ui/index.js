@@ -1,6 +1,8 @@
 export { default as DataRow } from './DataRow';
 export { default as EmptyState } from './EmptyState';
 export { default as ErrorState } from './ErrorState';
+export { default as FormField } from './FormField';
+export { default as FormModal } from './FormModal';
 export { default as Loader } from './Loader';
 export { default as PageHeader } from './PageHeader';
 export { default as Panel } from './Panel';

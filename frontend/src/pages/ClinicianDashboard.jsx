@@ -6,7 +6,7 @@ import Layout from '../components/Layout';
 import { DataRow, EmptyState, ErrorState, Loader, PageHeader, Panel, StatCard, StatusPill } from '../components/ui';
 import { useAsync } from '../hooks/useAsync';
 import { getPatientSummaries } from '../api/clinician';
-
+import { ALERT_ACCENTS } from '../utils/bpStatus';
 import { pluralise } from '../utils/format';
 
 export default function ClinicianDashboard() {
@@ -42,10 +42,10 @@ export default function ClinicianDashboard() {
             <StatCard label="Total patients" icon={Users} value={patients.length} />
           </Col>
           <Col md={4} sm={6}>
-            <StatCard label="High readings" value={counts.high} valueColor="#DC2626" sub="Based on latest reading" />
+            <StatCard label="High readings" value={counts.high} valueColor={ALERT_ACCENTS.high} sub="Based on latest reading" />
           </Col>
           <Col md={4} sm={6}>
-            <StatCard label="Elevated readings" value={counts.elevated} valueColor="#CA8A04" sub="Based on latest reading" />
+            <StatCard label="Elevated readings" value={counts.elevated} valueColor={ALERT_ACCENTS.elevated} sub="Based on latest reading" />
           </Col>
         </Row>
 
@@ -82,7 +82,7 @@ export default function ClinicianDashboard() {
                 trailing={
                   <>
                     <div className="text-end">
-                      <div className="hs-reading-value" style={{ fontSize: '0.95rem' }}>
+                      <div className="hs-reading-value hs-reading-value-sm">
                         {patient.latest ? `${patient.latest.systolic}/${patient.latest.diastolic}` : '—'}
                       </div>
                       <div className="hs-reading-meta">{pluralise(patient.reading_count, 'reading')}</div>

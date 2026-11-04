@@ -1,14 +1,15 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Alert, Button, Container, Form } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import { Activity, HeartPulse, Info, Sparkles } from 'lucide-react';
 import Layout from '../components/Layout';
-import { PageHeader } from '../components/ui';
+import { FormField, PageHeader } from '../components/ui';
 import { useForm } from '../hooks/useForm';
+import { useSubmit } from '../hooks/useSubmit';
 import { useToast } from '../context/ToastContext';
 import { createReading } from '../api/readings';
 import { classifyBP, statusInfo, STATUS_NOTES } from '../utils/bpStatus';
-import { errorMessage, toLocalDateTimeInput } from '../utils/format';
+import { toLocalDateTimeInput, toTriState } from '../utils/format';
 
 // Mirrors the Field(ge=…, le=…) constraints in backend/app/schemas/reading.py.
 const LIMITS = {
@@ -82,10 +83,33 @@ export default function LogReading() {
     diastolic: '',
     heart_rate: '',
     recorded_at: toLocalDateTimeInput(),
+    rested_before: '',
+    stimulant_before: '',
     notes: '',
   });
-  const [error, setError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+
+  const { submit, submitting, error, setError } = useSubmit(
+    async () => {
+      const validationError = validate(values);
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+
+      const created = await createReading({
+        systolic: Number(values.systolic),
+        diastolic: Number(values.diastolic),
+        heart_rate: values.heart_rate ? Number(values.heart_rate) : null,
+        recorded_at: new Date(values.recorded_at).toISOString(),
+        notes: values.notes.trim() || null,
+        rested_before: toTriState(values.rested_before),
+        stimulant_before: toTriState(values.stimulant_before),
+      });
+      toast.success(`Reading saved — ${statusInfo(created.status).label} status recorded.`);
+      navigate('/readings');
+    },
+    { fallback: 'Could not save reading.', onError: (message) => toast.error(message) },
+  );
 
   const liveStatus = useMemo(
     () => classifyBP(Number(values.systolic) || null, Number(values.diastolic) || null),
@@ -93,40 +117,9 @@ export default function LogReading() {
   );
   const liveInfo = liveStatus ? statusInfo(liveStatus) : null;
 
-  async function handleSubmit(event) {
-    event.preventDefault();
-
-    const validationError = validate(values);
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-    setError('');
-    setSubmitting(true);
-
-    try {
-      const created = await createReading({
-        systolic: Number(values.systolic),
-        diastolic: Number(values.diastolic),
-        heart_rate: values.heart_rate ? Number(values.heart_rate) : null,
-        recorded_at: new Date(values.recorded_at).toISOString(),
-        notes: values.notes.trim() || null,
-        source: 'manual',
-      });
-      toast.success(`Reading saved — ${statusInfo(created.status).label} status recorded.`);
-      navigate('/readings');
-    } catch (err) {
-      const message = errorMessage(err, 'Could not save reading.');
-      setError(message);
-      toast.error(message);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
   return (
     <Layout>
-      <Container fluid className="px-0" style={{ maxWidth: 820 }}>
+      <Container fluid className="px-0 hs-page-wide">
         <PageHeader
           title="Log new reading"
           subtitle="Enter your latest blood pressure measurement."
@@ -146,7 +139,7 @@ export default function LogReading() {
 
             {error && <Alert variant="danger" role="alert">{error}</Alert>}
 
-            <Form onSubmit={handleSubmit} noValidate>
+            <Form onSubmit={submit} noValidate>
               <div className="row g-3 mb-3">
                 <div className="col-6">
                   <MeasurementInput
@@ -206,6 +199,33 @@ export default function LogReading() {
                   />
                 </div>
               </div>
+
+              <fieldset className="hs-conditions mb-3">
+                <legend className="hs-form-label">How did you measure? (optional)</legend>
+                <div className="row g-3">
+                  <div className="col-md-6">
+                    <FormField id="rested-before" label="Rested quietly for about 5 minutes first?" className="mb-0">
+                      <Form.Select name="rested_before" value={values.rested_before} onChange={handleChange}>
+                        <option value="">Not sure</option>
+                        <option value="yes">Yes</option>
+                        <option value="no">No</option>
+                      </Form.Select>
+                    </FormField>
+                  </div>
+                  <div className="col-md-6">
+                    <FormField id="stimulant-before" label="Coffee, tea, smoking or exercise in the last 30 minutes?" className="mb-0">
+                      <Form.Select name="stimulant_before" value={values.stimulant_before} onChange={handleChange}>
+                        <option value="">Not sure</option>
+                        <option value="no">No</option>
+                        <option value="yes">Yes</option>
+                      </Form.Select>
+                    </FormField>
+                  </div>
+                </div>
+                <Form.Text className="text-muted">
+                  Resting first, and waiting 30 minutes after coffee, tea, smoking or exercise, gives the most accurate reading.
+                </Form.Text>
+              </fieldset>
 
               <Form.Group className="mb-4" controlId="notes">
                 <Form.Label className="hs-form-label">Notes (optional)</Form.Label>

@@ -5,12 +5,13 @@ from sqlalchemy import pool
 
 from alembic import context
 
-import sys, os
+import sys
+import os
+
 sys.path.append(os.getcwd())
 
 from app.core.config import settings
 from app.core.database import Base
-from app.models import user  # noqa: ensures models are registered on Base.metadata
 
 config = context.config
 
@@ -45,9 +46,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()

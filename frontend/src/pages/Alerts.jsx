@@ -4,17 +4,15 @@ import Layout from '../components/Layout';
 import { DataRow, EmptyState, ErrorState, Loader, PageHeader, Panel } from '../components/ui';
 import { useAsync } from '../hooks/useAsync';
 import { getMyAlerts } from '../api/alerts';
+import { alertAccent } from '../utils/bpStatus';
 import { formatDateTime } from '../utils/format';
-
-const HIGH_ACCENT = '#DC2626';
-const ELEVATED_ACCENT = '#CA8A04';
 
 export default function Alerts() {
   const { data: alerts, loading, error, reload } = useAsync(getMyAlerts, [], []);
 
   return (
     <Layout>
-      <Container fluid className="px-0" style={{ maxWidth: 760 }}>
+      <Container fluid className="px-0 hs-page-medium">
         <PageHeader
           title="Alerts"
           subtitle="Notifications raised when your blood pressure trend needs attention."
@@ -35,7 +33,7 @@ export default function Alerts() {
               <DataRow
                 key={alert.alert_id}
                 align="start"
-                accent={alert.alert_type?.includes('high') ? HIGH_ACCENT : ELEVATED_ACCENT}
+                accent={alertAccent(alert.alert_type)}
                 trailing={
                   alert.acknowledged ? (
                     <span className="hs-alert-reviewed">

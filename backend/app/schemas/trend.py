@@ -1,12 +1,15 @@
 from datetime import date
+
 from pydantic import BaseModel
 
+
 class DailyAverage(BaseModel):
-    date:date
-    avg_systolic:float
-    avg_diastolic:float
-    reading_count:int
+    date: date
+    avg_systolic: float
+    avg_diastolic: float
+    reading_count: int
     status: str
+
 
 class TrendSummary(BaseModel):
     period_days: int

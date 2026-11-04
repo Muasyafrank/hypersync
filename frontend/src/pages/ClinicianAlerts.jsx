@@ -7,10 +7,8 @@ import { DataRow, EmptyState, ErrorState, Loader, PageHeader, Panel } from '../c
 import { useAsync } from '../hooks/useAsync';
 import { useToast } from '../context/ToastContext';
 import { acknowledgeAlert, getAllAlerts } from '../api/alerts';
+import { alertAccent } from '../utils/bpStatus';
 import { errorMessage, formatDateTime } from '../utils/format';
-
-const HIGH_ACCENT = '#DC2626';
-const ELEVATED_ACCENT = '#CA8A04';
 
 export default function ClinicianAlerts() {
   const navigate = useNavigate();
@@ -67,12 +65,12 @@ export default function ClinicianAlerts() {
             />
           ) : (
             alerts.map((alert) => {
-              const isHigh = alert.alert_type?.includes('high');
+              const accent = alertAccent(alert.alert_type);
               return (
                 <DataRow
                   key={alert.alert_id}
                   align="start"
-                  accent={isHigh ? HIGH_ACCENT : ELEVATED_ACCENT}
+                  accent={accent}
                   trailing={
                     !alert.acknowledged && (
                       <Button
@@ -91,7 +89,7 @@ export default function ClinicianAlerts() {
                     className="hs-alert-patient"
                     onClick={() => navigate(`/clinician/patients/${alert.patient_id}`)}
                   >
-                    <AlertTriangle size={15} color={isHigh ? HIGH_ACCENT : ELEVATED_ACCENT} />
+                    <AlertTriangle size={15} color={accent} />
                     {alert.patient_name || 'Patient'}
                   </button>
                   <div className="hs-alert-message">{alert.message}</div>

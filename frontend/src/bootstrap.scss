@@ -1,0 +1,70 @@
+// A trimmed Bootstrap build.
+//
+// The app uses 12 react-bootstrap components and a few dozen utility classes,
+// but `bootstrap.min.css` ships everything (carousel, navbar, accordion, every
+// colour utility…). This compiles only what is used: about half the CSS.
+//
+// If a new component renders unstyled, add its partial below; `npm run
+// check:css` (after a build) fails when the code uses a Bootstrap class this
+// build leaves out. Dark mode, RFS and CSS-grid are off, as none are used.
+
+$enable-dark-mode: false;
+$enable-cssgrid: false;
+
+// 1. Configuration (must come first, in this order)
+@import "../node_modules/bootstrap/scss/functions";
+@import "../node_modules/bootstrap/scss/variables";
+@import "../node_modules/bootstrap/scss/variables-dark";
+@import "../node_modules/bootstrap/scss/maps";
+@import "../node_modules/bootstrap/scss/mixins";
+
+// 2. Utilities: keep only the groups the app (and react-bootstrap) emit.
+@import "../node_modules/bootstrap/scss/utilities";
+$utilities: map-get-multiple(
+  $utilities,
+  (
+    "align", "overflow", "display", "position", "top", "bottom", "start", "end",
+    "border", "width", "height",
+    "flex", "flex-direction", "flex-grow", "flex-shrink", "flex-wrap",
+    "justify-content", "align-items", "align-self",
+    "margin", "margin-x", "margin-y", "margin-top", "margin-end", "margin-bottom", "margin-start",
+    "padding", "padding-x", "padding-y", "padding-top", "padding-end", "padding-bottom", "padding-start",
+    "gap", "font-size", "font-weight", "line-height", "text-align", "text-decoration",
+    "text-transform", "white-space", "word-wrap", "color", "rounded", "visibility", "z-index"
+  )
+);
+
+// Only `display` keeps its responsive variants (d-lg-none is used); every other
+// utility is generated at the base breakpoint only.
+@each $name, $utility in $utilities {
+  @if $name != "display" {
+    $utilities: map-merge($utilities, ($name: map-merge($utility, (responsive: false))));
+  }
+}
+
+// 3. Layout and content
+@import "../node_modules/bootstrap/scss/root";
+@import "../node_modules/bootstrap/scss/reboot";
+@import "../node_modules/bootstrap/scss/containers";
+@import "../node_modules/bootstrap/scss/grid";
+
+// 4. Components actually rendered (react-bootstrap: Alert, Button, Card,
+//    Form*, InputGroup, Modal, Spinner, Toast/ToastContainer)
+// Form pieces in use (skipping range, floating labels and validation states)
+@import "../node_modules/bootstrap/scss/forms/labels";
+@import "../node_modules/bootstrap/scss/forms/form-text";
+@import "../node_modules/bootstrap/scss/forms/form-control";
+@import "../node_modules/bootstrap/scss/forms/form-select";
+@import "../node_modules/bootstrap/scss/forms/form-check";
+@import "../node_modules/bootstrap/scss/forms/input-group";
+@import "../node_modules/bootstrap/scss/buttons";
+@import "../node_modules/bootstrap/scss/transitions";
+@import "../node_modules/bootstrap/scss/card";
+@import "../node_modules/bootstrap/scss/alert";
+@import "../node_modules/bootstrap/scss/modal";
+@import "../node_modules/bootstrap/scss/spinners";
+@import "../node_modules/bootstrap/scss/toasts";
+
+// 5. Helpers and the utility classes themselves
+@import "../node_modules/bootstrap/scss/helpers/visually-hidden";
+@import "../node_modules/bootstrap/scss/utilities/api";

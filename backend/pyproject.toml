@@ -1,0 +1,22 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = ["alembic/versions", "hyper"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = [
+    "E501",  # recommendation copy is long prose; line length is left to the formatter
+    "B008",  # FastAPI's Depends()/Query() in argument defaults is the documented idiom
+    "UP042",  # keep `str, Enum`: StrEnum changes str() output and these map to DB enum names
+]
+
+[tool.ruff.lint.per-file-ignores]
+# These scripts put the backend directory on sys.path before importing `app`,
+# so their imports must stay below that statement.
+"scripts/*.py" = ["E402", "I001"]
+"alembic/env.py" = ["E402", "I001"]

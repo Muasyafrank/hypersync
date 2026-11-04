@@ -1,10 +1,7 @@
-Data source: Kenya STEPS 2015 (n=4418)
+Kenya STEPS 2015, n=4282, features=['age', 'sex', 'smoked', 'alcohol_consumed', 'salt_score', 'activity_minutes', 'diet_adherence']
 
-              precision    recall  f1-score   support
+logistic (deployed)    CV AUC 0.656 +/- 0.005  Brier 0.2253
+random forest (v2)     CV AUC 0.656 +/- 0.005  Brier 0.2313
+gradient boosting      CV AUC 0.655 +/- 0.004  Brier 0.2265
 
- not_at_risk       0.70      0.67      0.68       523
-     at_risk       0.55      0.58      0.56       361
-
-    accuracy                           0.63       884
-   macro avg       0.62      0.63      0.62       884
-weighted avg       0.64      0.63      0.63       884
+Hold-out at threshold 0.42: sensitivity 0.57, specificity 0.64, AUC 0.629

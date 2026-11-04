@@ -1,6 +1,6 @@
-
 import sys
 import os
+
 sys.path.append(os.getcwd())
 
 import getpass
@@ -40,7 +40,7 @@ def main():
         db.commit()
         db.refresh(clinician)
 
-        print(f"\nClinician account created successfully:")
+        print("\nClinician account created successfully:")
         print(f"  Name:  {clinician.full_name}")
         print(f"  Email: {clinician.email}")
         print(f"  Role:  {clinician.role.value}")

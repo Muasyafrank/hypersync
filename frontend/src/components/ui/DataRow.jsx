@@ -7,14 +7,16 @@ export default function DataRow({ accent, onClick, align = 'center', children, t
   const interactive = typeof onClick === 'function';
   const Tag = interactive ? 'button' : 'div';
 
+  const classes = [
+    'hs-reading-row',
+    interactive && 'hs-reading-row-interactive',
+    align === 'start' && 'hs-align-start',
+    className,
+  ];
+
   return (
-    <Tag
-      type={interactive ? 'button' : undefined}
-      onClick={onClick}
-      className={`hs-reading-row ${interactive ? 'hs-reading-row-interactive' : ''} ${className}`.trim()}
-      style={{ alignItems: align === 'start' ? 'flex-start' : 'center' }}
-    >
-      <div className="hs-reading-row-main" style={{ alignItems: align === 'start' ? 'flex-start' : 'center' }}>
+    <Tag type={interactive ? 'button' : undefined} onClick={onClick} className={classes.filter(Boolean).join(' ')}>
+      <div className="hs-reading-row-main">
         {accent && <span className="hs-reading-row-accent" style={{ backgroundColor: accent }} aria-hidden="true" />}
         <div className="flex-grow-1 text-start">{children}</div>
       </div>

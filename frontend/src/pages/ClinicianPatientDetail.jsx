@@ -1,49 +1,50 @@
 import { useState } from 'react';
 import { Container } from 'react-bootstrap';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Brain, Calendar, Moon, Pill, Salad } from 'lucide-react';
+import { Calendar } from 'lucide-react';
 import Layout from '../components/Layout';
+import FactorEntryRow from '../components/lifestyle/FactorEntryRow';
+import ReadingConditions from '../components/ReadingConditions';
 import BPTrendChart from '../components/BPTrendChart';
 import PeriodSelect from '../components/PeriodSelect';
 import { DataRow, EmptyState, ErrorState, Loader, PageHeader, Panel, StatusPill } from '../components/ui';
 import { useAsync } from '../hooks/useAsync';
 import { getPatient, getPatientFactors, getPatientReadings, getPatientTrend } from '../api/clinician';
 import { statusInfo } from '../utils/bpStatus';
-import { formatDateTime, formatFullDate } from '../utils/format';
+import { formatDateTime } from '../utils/format';
 
-const EMPTY = { patient: null, readings: [], trend: null, factors: [] };
-
-/** One lifestyle entry's tags, skipping anything the patient didn't log. */
-function factorTags(factor) {
-  const tags = [];
-  if (factor.stress_level) tags.push({ icon: Brain, text: `${factor.stress_level} stress` });
-  if (factor.sleep_hours != null) tags.push({ icon: Moon, text: `${factor.sleep_hours}h sleep` });
-  if (factor.diet_adherence != null) tags.push({ icon: Salad, text: factor.diet_adherence ? 'Diet followed' : 'Diet missed' });
-  if (factor.medication_taken != null) tags.push({ icon: Pill, text: factor.medication_taken ? 'Meds taken' : 'Meds missed' });
-  return tags;
-}
+const EMPTY = { patient: null, readings: [], factors: [] };
 
 export default function ClinicianPatientDetail() {
   const { patientId } = useParams();
   const navigate = useNavigate();
   const [periodDays, setPeriodDays] = useState(30);
 
+  // The patient's record: loaded once per patient.
   const { data, loading, error, reload } = useAsync(
     async () => {
       // Fetched by id rather than by listing every patient and filtering.
-      const [patient, readings, trend, factors] = await Promise.all([
+      const [patient, readings, factors] = await Promise.all([
         getPatient(patientId),
         getPatientReadings(patientId),
-        getPatientTrend(patientId, periodDays),
         getPatientFactors(patientId).catch(() => []),
       ]);
-      return { patient, readings, trend, factors };
+      return { patient, readings, factors };
     },
-    [patientId, periodDays],
+    [patientId],
     EMPTY,
   );
 
-  const { patient, readings, trend, factors } = data ?? EMPTY;
+  // The trend is its own request, so changing the period refetches only this
+  // chart instead of reloading the whole page (and the patient's full history).
+  const {
+    data: trend,
+    loading: trendLoading,
+    error: trendError,
+    reload: reloadTrend,
+  } = useAsync(() => getPatientTrend(patientId, periodDays), [patientId, periodDays]);
+
+  const { patient, readings, factors } = data ?? EMPTY;
 
   if (loading) return <Layout><Loader className="py-5" /></Layout>;
   if (error) {
@@ -68,7 +69,11 @@ export default function ClinicianPatientDetail() {
           className="mb-4"
           action={<PeriodSelect value={periodDays} onChange={setPeriodDays} />}
         >
-          {trend?.daily_breakdown?.length ? (
+          {trendLoading ? (
+            <Loader />
+          ) : trendError ? (
+            <ErrorState message="Could not load the trend for this period." onRetry={reloadTrend} />
+          ) : trend?.daily_breakdown?.length ? (
             <BPTrendChart dailyBreakdown={trend.daily_breakdown} height={380} animate={false} />
           ) : (
             <EmptyState message="No readings in this period." />
@@ -92,6 +97,7 @@ export default function ClinicianPatientDetail() {
                 <div className="hs-reading-meta">
                   <Calendar size={13} /> {formatDateTime(reading.recorded_at)}
                 </div>
+                <ReadingConditions reading={reading} />
                 {reading.notes && <div className="hs-reading-note">“{reading.notes}”</div>}
               </DataRow>
             ))
@@ -102,20 +108,7 @@ export default function ClinicianPatientDetail() {
           {factors.length === 0 ? (
             <EmptyState message="No lifestyle entries logged yet." />
           ) : (
-            factors.map((factor) => (
-              <DataRow key={factor.factor_id}>
-                <div className="hs-reading-value" style={{ fontSize: '0.9rem' }}>
-                  {formatFullDate(factor.logged_date)}
-                </div>
-                <div className="d-flex gap-3 mt-1 flex-wrap hs-factor-tags">
-                  {factorTags(factor).map(({ icon: Icon, text }) => (
-                    <span key={text} className="d-flex align-items-center gap-1">
-                      <Icon size={13} /> {text}
-                    </span>
-                  ))}
-                </div>
-              </DataRow>
-            ))
+            factors.map((factor) => <FactorEntryRow key={factor.factor_id} entry={factor} />)
           )}
         </Panel>
       </Container>

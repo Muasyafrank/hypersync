@@ -1,6 +1,5 @@
 import uuid
 from datetime import date
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -23,6 +22,8 @@ FACTOR_FIELDS = (
     "alcohol_consumed",
     "smoked",
     "physical_activity_minutes",
+    "temperature_feel",
+    "noise_level",
 )
 
 
@@ -52,7 +53,7 @@ def log_factor(
     return factor
 
 
-@router.get("/me", response_model=List[EnvironmentalFactorOut])
+@router.get("/me", response_model=list[EnvironmentalFactorOut])
 def get_my_factors(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_patient),
@@ -60,7 +61,7 @@ def get_my_factors(
     return _factors_for(db, current_user.user_id)
 
 
-@router.get("/patient/{patient_id}", response_model=List[EnvironmentalFactorOut])
+@router.get("/patient/{patient_id}", response_model=list[EnvironmentalFactorOut])
 def get_patient_factors(
     patient_id: uuid.UUID,
     db: Session = Depends(get_db),

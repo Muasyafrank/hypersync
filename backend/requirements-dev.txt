@@ -1,0 +1,7 @@
+# Tests, linting and the seed script.
+-r requirements.txt
+
+pytest==9.2.0
+httpx==0.28.1     # FastAPI TestClient
+ruff==0.17.3
+openpyxl==3.1.5   # scripts/seed_test_data.py reads the test-data workbook

@@ -40,12 +40,40 @@ export function pluralise(count, noun, plural = `${noun}s`) {
   return `${count} ${count === 1 ? noun : plural}`;
 }
 
+export const NETWORK_ERROR_MESSAGE = 'Could not reach the server. Check your connection and try again.';
+
 /** Turn an axios error into something safe to show a user. */
 export function errorMessage(err, fallback = 'Something went wrong. Please try again.') {
+  // A request that went out but got no response: offline, timeout, server down.
+  if (err?.request && !err.response) return NETWORK_ERROR_MESSAGE;
+
   const detail = err?.response?.data?.detail;
   if (Array.isArray(detail)) return detail.map((d) => d.msg).filter(Boolean).join(', ') || fallback;
   if (typeof detail === 'string') return detail;
   return fallback;
+}
+
+/** Select value ('', 'yes', 'no') -> null / true / false for an optional yes/no question. */
+export function toTriState(value) {
+  if (value === 'yes') return true;
+  if (value === 'no') return false;
+  return null;
+}
+
+/**
+ * Short flags for a reading taken under conditions that can inflate it.
+ * Unanswered ("not sure") is never flagged. Returns [] when nothing to note.
+ */
+export function measurementFlags(reading) {
+  const flags = [];
+  if (reading?.rested_before === false) flags.push('Not rested first');
+  if (reading?.stimulant_before === true) flags.push('Soon after coffee, tea, smoking or exercise');
+  return flags;
+}
+
+/** "patient" -> "Patient". */
+export function capitalize(text) {
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : '';
 }
 
 /** Where each role lands after logging in. */
@@ -55,8 +83,19 @@ export function roleHome(role) {
   return '/dashboard';
 }
 
+const pad = (n) => String(n).padStart(2, '0');
+
+/**
+ * "YYYY-MM-DD" for the user's own calendar day.
+ *
+ * Do not use `date.toISOString().slice(0, 10)` for this: that is the UTC day,
+ * which for Kenya (UTC+3) is still *yesterday* between midnight and 03:00.
+ */
+export function toLocalDateInput(date = new Date()) {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
 /** Input value for <input type="datetime-local"> in the user's own timezone. */
 export function toLocalDateTimeInput(date = new Date()) {
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return `${toLocalDateInput(date)}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
