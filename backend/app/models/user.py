@@ -7,6 +7,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+from app.core.localtime import DEFAULT_TIMEZONE_NAME
 
 
 class UserRole(str, enum.Enum):
@@ -55,6 +56,16 @@ class PatientProfile(Base):
     date_of_birth = Column(Date, nullable=True)
 
     sex = Column(Enum(SexEnum), nullable=True)
+
+    # The patient's own calendar is used when a clinician reviews weekly
+    # averages. It is captured at registration and does not depend on the
+    # clinician's browser timezone.
+    timezone = Column(
+        String,
+        nullable=False,
+        default=DEFAULT_TIMEZONE_NAME,
+        server_default=DEFAULT_TIMEZONE_NAME,
+    )
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

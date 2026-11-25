@@ -19,8 +19,8 @@ LOW = "low"
 NO_DATA = "no_data"
 
 
-def classify_bp(systolic: int, diastolic: int) -> str:
-    """Classify a single reading. Either value crossing a band sets the band."""
+def classify_bp(systolic: float, diastolic: float) -> str:
+    """Classify a reading or average. Either value crossing a band sets the band."""
     if systolic < LOW_SYSTOLIC or diastolic < LOW_DIASTOLIC:
         return LOW
     if systolic >= HIGH_SYSTOLIC or diastolic >= HIGH_DIASTOLIC:

@@ -152,9 +152,31 @@ class TestBuildAdvice:
             diet_adherence=False, sleep_hours=3, stress_level="high", caffeine_intake="high", medication_taken=False,
         )  # fmt: skip
         advice = build_advice([entry(0, **everything)], {}, day(0), None, limit=3)
+        text = " ".join(a["message"] for a in advice)
         assert advice[-1]["message"].startswith("Also worth attention")
+        assert advice[-1]["source"] == "rule"
         for label in ("stress", "sleep", "coffee or tea"):
             assert label in advice[-1]["message"]
+        for field in everything:
+            assert TIPS[field] in text
+
+    def test_an_overflow_item_combining_model_and_rule_guidance_is_marked_mixed(self):
+        log = [
+            entry(
+                0,
+                alcohol_consumed=True,
+                smoked=True,
+                sleep_hours=3,
+            )
+        ]
+        effects = {
+            "alcohol_consumed": {"odds_ratio": 1.5, "ci_low": 1.1, "ci_high": 2.0},
+        }
+
+        advice = build_advice(log, {}, day(0), effects, limit=2)
+
+        assert advice[-1]["source"] == "mixed"
+        assert advice[-1]["message"].startswith("Also worth attention")
 
     def test_a_personal_pattern_comes_first_and_replaces_the_generic_line(self):
         bad = {0, 2, 4}

@@ -1,92 +1,100 @@
 # HyperSync risk model: what the data can and cannot do
 
-Trained on Kenya STEPS 2015 (n = 4,500; 4,282 usable). Target: elevated or high
-blood pressure (same thresholds as `app/core/bp_classification.py`).
-Retrain with `python -m ml.train_model` (see the docstring for options).
+The deployed artefact is `ml/models/bp_status_model.joblib`. Its version,
+feature contract, limitations and SHA-256 checksum are recorded in
+`ml/models/MODEL_CARD.md`; the machine-readable evaluation summary is in
+`ml/artifacts/metrics.json`.
 
-All figures below come from repeated 5-fold cross-validation (3 repeats,
-identical folds for every model). A single 20% test split (884 rows) has a
-standard error of about 0.018 AUC, bigger than most differences between models.
+A clean checkout does **not** need the raw `.sav` survey file for normal
+operation. The small versioned model artefact is committed. Retraining with
+`python -m ml.train_model` is an optional maintenance task that requires the
+separately obtained raw survey file and `requirements-ml.txt`; the current-feature
+command also regenerates `ml/models/SHA256SUMS`. The experimental BMI command
+writes separately named model/checksum/report files and cannot overwrite the
+published runtime artefact.
 
-## 1. The model is at the ceiling of its inputs
+## Reproducible current evaluation
 
-| Features | Random forest | Gradient boosting | Logistic + age curve |
-|---|---|---|---|
-| age + sex only | 0.640 | 0.651 | 0.654 |
-| **current 7 features** | 0.658 | 0.655 | 0.657 |
-| current + BMI | **0.692** | 0.682 | 0.686 |
-| current + BMI + waist | 0.694 | 0.685 | 0.689 |
+The training target is the Kenya STEPS 2015 respondent's `elevated` or `high`
+blood-pressure group, using the same low-first classification as the
+application. The current feature-complete training set contains 4,282
+respondents; 41.7% are in that group.
 
-(AUC, 4,147 identical rows. 0.5 is a coin flip.)
+`ml/train_model.py` compares three candidates with the same repeated stratified
+5-fold cross-validation (3 repeats). The committed results are:
 
-- The five lifestyle questions add almost nothing over age and sex.
-- Tuning the forest (depth, leaf size, class weights) moved AUC between 0.688
-  and 0.692. Swapping algorithms changes nothing. Only new information helps.
-- BMI is the one big gain (+0.03). Waist adds almost nothing beyond BMI.
-- Resting pulse adds about +0.013 on top of BMI (0.688 to 0.701).
-  Urban/rural, wealth and education add nothing.
-- The previously saved figure (0.667 AUC in metrics.json) came from one lucky split. Cross-validation
-  puts the same model at 0.656-0.658.
+| Model | Mean CV AUC | Standard error | Mean Brier score |
+| --- | ---: | ---: | ---: |
+| Logistic regression with an age spline (deployed) | 0.656 | 0.005 | 0.2253 |
+| Random forest | 0.656 | 0.005 | 0.2313 |
+| Gradient boosting | 0.655 | 0.004 | 0.2265 |
 
-## 2. Why the deployed model is now logistic regression
+A separate five-fold out-of-fold calibration report gives a calibration slope
+of 0.983 and mean predicted/observed shares of 0.417/0.417. The familiar 20%
+hold-out split contains 857 respondents and gives AUC 0.629, sensitivity 0.574
+and specificity 0.638 at a threshold of 0.417. The cross-validation estimate is
+the more stable model-selection figure; the hold-out result is recorded as a
+secondary check.
 
-Same accuracy, but calibrated. The old forest used `class_weight="balanced"`,
-so its probabilities were inflated: mean prediction 48% against 42% observed.
-That number was shown to patients as their "estimated risk".
+These are local survey-model discrimination and calibration measures. They are
+not evidence of clinical benefit, safety, calibration in HyperSync users, or
+effectiveness of the app's recommendations.
 
-| Model | Mean predicted | Observed | Calibration slope (ideal 1) |
-|---|---|---|---|
-| Random forest, balanced | 48.3% | 41.8% | 1.17 |
-| Logistic regression | 41.8% | 41.8% | 0.99 |
+## Why the deployed model is logistic regression
 
-## 3. Why factor ranking no longer uses feature importance
+The candidate models have effectively the same discrimination in repeated
+cross-validation, while the deployed logistic model's calibration is close to
+the observed training share. The final model is refitted on all available
+feature-complete rows and stores its training-population medians for disclosed
+fallbacks.
 
-The forest's built-in importance ranked physical activity second (0.20), behind
-only age. On held-out data, shuffling activity barely changed accuracy:
+The bundle version, exact feature list and SHA-256 digest are part of the
+runtime contract. The endpoint verifies the digest before unpickling, validates
+the version and the unpacked bundle's exact feature/input contract before use,
+and continues without a population estimate if the artefact does not match.
 
-| Feature | Built-in importance | Held-out permutation (AUC drop) |
-|---|---|---|
-| age | 0.625 | +0.143 +/- 0.021 |
-| activity_minutes | 0.204 | +0.009 +/- 0.005 |
-| salt_score | 0.068 | +0.002 +/- 0.004 |
-| alcohol_consumed | 0.035 | +0.006 +/- 0.004 |
-| smoked | 0.018 | -0.002 +/- 0.001 |
-| diet_adherence | 0.014 | +0.001 +/- 0.001 |
+## How survey effects affect factor ordering
 
-Built-in importance favours continuous variables, so activity looked far more
-important than it is. Adjusted effects (odds ratio, 95% bootstrap CI, one model
-holding the others fixed):
+The adjusted effects below come from one full-data logistic regression with a
+95% bootstrap interval, holding the other included factors fixed. They are
+**not** repeated-cross-validation results.
 
-| Factor | OR | Clear effect? |
-|---|---|---|
-| +10 years of age | 1.52 (1.45-1.60) | yes |
-| +5 BMI points (separate run) | 1.56 (1.42-1.67) | yes |
-| alcohol in last 30 days | 1.46 (1.21-1.74) | yes |
-| +30 active min/day | 0.97 (0.95-0.99) | yes, but small |
-| salt level +1 | 0.96 (0.91-1.02) | no |
-| currently smokes | 0.85 (0.64-1.09) | no |
-| meets fruit/veg target | 1.08 (0.85-1.34) | no |
+| Factor | Adjusted odds ratio (95% bootstrap interval) | Interval excludes 1? |
+| --- | ---: | --- |
+| +10 years of age | 1.52 (1.45–1.60) | yes |
+| Alcohol in the last 30 days | 1.46 (1.21–1.74) | yes |
+| +30 active minutes/day | 0.97 (0.95–0.99) | yes, but small |
+| Salt level +1 | 0.96 (0.91–1.02) | no |
+| Currently smokes | 0.85 (0.64–1.09) | no |
+| Meets fruit/vegetable target | 1.08 (0.85–1.34) | no |
 
-"No clear effect" does not mean salt or diet do not matter. Trials show they
-do. It means these single survey questions are too crude to detect them. So
-`lifestyle_factors.rank_factors` credits a factor to the survey only when its
-interval excludes "no effect", and words everything else as general clinical
-guidance.
+“No clear effect” does not mean salt or diet do not matter. It means these
+single survey questions are too crude to detect an effect reliably. The app
+therefore credits a factor to the survey only when its interval excludes “no
+effect”; other wording is labelled as general clinical guidance rather than
+model-derived evidence.
 
-## 4. Limits to keep in mind
+## Limits to keep in mind
 
+- The deployed estimate is a **population probability used as context**, not a
+  diagnosis or an individual clinical prediction.
 - STEPS is cross-sectional: association at one moment, not proof that changing a
   habit changes a given person's blood pressure.
-- The questions differ from what the app logs. STEPS asks about the last 30
-  days and "how often do you add salt"; HyperSync logs a daily entry. Treat the
-  mapping in `_build_model_features` as approximate.
-- 11% of respondents were on blood pressure medication, which hides their risk.
-- Defaults are used when a lifestyle field is missing, so a thin log produces a
-  near-generic estimate.
+- The survey questions differ from what the app logs. STEPS asks about the last
+  30 days and “how often do you add salt”; HyperSync logs a daily entry. Treat
+  the mapping in `_build_model_features` as approximate.
+- Activity minutes are capped at 240/day in the application, matching the
+  training pipeline, and that adjustment is disclosed to the patient. The
+  population estimate is omitted for ages outside the training population's
+  18–100 range.
+- 11% of respondents were on blood pressure medication, which may hide their
+  risk. Medication adherence is deliberately not a model feature.
+- Missing profile or lifestyle inputs use recorded training-population medians,
+  and the patient-facing estimate names the defaulted fields.
 
-## 5. Next step with the largest payoff
+## Experimental BMI path
 
-Collect height (once, on the profile) and weight (in the Lifestyle log), compute
-BMI, then run `python -m ml.train_model --features bmi`. The engine already fills
-any feature the app does not collect with the training median, so the switch is
-a retrain plus the data-collection change.
+BMI is not collected by the current application and is not part of the published
+runtime artefact. `python -m ml.train_model --features bmi` is an experimental
+maintenance path that writes a separate model, checksum and reports directory.
+It must not be described as a validated or clinically beneficial improvement.

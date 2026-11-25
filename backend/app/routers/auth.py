@@ -89,7 +89,14 @@ def register(payload: UserRegister, db: Session = Depends(get_db)):
     db.add(user)
     db.flush()
 
-    db.add(PatientProfile(user_id=user.user_id, date_of_birth=payload.date_of_birth, sex=payload.sex))
+    db.add(
+        PatientProfile(
+            user_id=user.user_id,
+            date_of_birth=payload.date_of_birth,
+            sex=payload.sex,
+            timezone=payload.timezone,
+        )
+    )
 
     db.commit()
     db.refresh(user)

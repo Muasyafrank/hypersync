@@ -15,7 +15,7 @@ import { join } from 'node:path';
 // Card, Form*, InputGroup, Modal, Spinner, Toast, grid). Found by rendering
 // every screen and collecting the resulting DOM classes.
 const REACT_BOOTSTRAP = [
-  'active', 'alert', 'alert-danger', 'btn', 'btn-danger', 'btn-link', 'btn-outline-secondary', 'btn-primary', 'btn-sm',
+  'active', 'alert', 'alert-danger', 'alert-success', 'btn', 'btn-danger', 'btn-link', 'btn-outline-secondary', 'btn-primary', 'btn-sm',
   'card', 'card-body', 'col-6', 'col-lg-5', 'col-lg-7', 'col-md-3', 'col-md-4', 'col-sm-6', 'container',
   'container-fluid', 'end-0', 'fade', 'form-check', 'form-check-input', 'form-check-label', 'form-control',
   'form-label', 'form-select', 'form-switch', 'form-text', 'input-group', 'modal', 'modal-backdrop', 'modal-body',

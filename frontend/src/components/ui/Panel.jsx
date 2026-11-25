@@ -6,7 +6,7 @@ export default function Panel({ title, description, action, children, className 
       {hasHeader && (
         <div className="hs-panel-header">
           <div>
-            {title && <h5 className="hs-title mb-1">{title}</h5>}
+            {title && <h2 className="hs-title mb-1">{title}</h2>}
             {description && <p className="hs-subtitle hs-panel-description mb-0">{description}</p>}
           </div>
           {action}

@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, String
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import backref, relationship
 from sqlalchemy.sql import func
@@ -17,6 +17,9 @@ class Recommendation(Base):
     based_on_trend = Column(String, nullable=True)  # e.g. "elevated", "high"
     confidence = Column(Float, nullable=True)
     source = Column(String, nullable=True)
+    # Order within its batch. A batch is written in one transaction, so every row shares one created_at
+    # and could not otherwise be put back in the order it was shown.
+    position = Column(Integer, nullable=False, server_default="0", default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     patient = relationship("User", backref=backref("recommendations", passive_deletes=True))

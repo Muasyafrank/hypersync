@@ -11,6 +11,7 @@ from app.models.environmental_factor import (
 from app.models.reading import BPReading
 from app.models.recommendation import Recommendation
 from app.models.token import BlacklistedToken, RefreshToken
+from app.models.treatment_review import TreatmentReviewRecord
 from app.models.user import PatientProfile, SexEnum, User, UserRole
 
 __all__ = [
@@ -26,6 +27,7 @@ __all__ = [
     "SexEnum",
     "StressLevel",
     "TemperatureFeel",
+    "TreatmentReviewRecord",
     "User",
     "UserRole",
 ]

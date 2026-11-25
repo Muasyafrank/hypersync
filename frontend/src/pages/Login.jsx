@@ -30,7 +30,7 @@ export default function Login() {
   return (
     <AuthCard
       title="Welcome back"
-      subtitle="Log in to continue monitoring your blood pressure"
+      subtitle="Log in to continue tracking your manually entered blood pressure"
       footer={<>Don&apos;t have an account? <Link to="/register" className="hs-link">Register</Link></>}
     >
       {error && <Alert variant="danger" role="alert">{error}</Alert>}

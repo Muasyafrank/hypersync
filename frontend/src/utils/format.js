@@ -6,6 +6,27 @@ const DATE_FULL = { month: 'short', day: 'numeric', year: 'numeric' };
 
 function toDate(value) {
   if (!value) return null;
+
+  // A date-only API value is a calendar day, not an instant. Constructing it
+  // with `new Date('YYYY-MM-DD')` treats it as UTC midnight, which displays as
+  // the previous day in UTC-negative timezones. Build it in the user's local
+  // calendar instead.
+  if (typeof value === 'string') {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (match) {
+      const [, year, month, day] = match.map(Number);
+      const date = new Date(year, month - 1, day);
+      if (
+        date.getFullYear() === year
+        && date.getMonth() === month - 1
+        && date.getDate() === day
+      ) {
+        return date;
+      }
+      return null;
+    }
+  }
+
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
 }
@@ -23,6 +44,19 @@ export function formatShortDate(value, fallback = '') {
 export function formatFullDate(value, fallback = '') {
   const date = toDate(value);
   return date ? date.toLocaleDateString(undefined, DATE_FULL) : fallback;
+}
+
+/** Clock time only, e.g. "14:32". */
+export function formatTime(value, fallback = '') {
+  const date = toDate(value);
+  return date ? date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : fallback;
+}
+
+/** "2026-10-20" -> "20 Oct", read as a calendar day (not shifted by the timezone). */
+export function formatDayMonth(isoDate, fallback = '') {
+  const [year, month, day] = String(isoDate ?? '').split('-').map(Number);
+  if (!year || !month || !day) return fallback;
+  return new Date(year, month - 1, day).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 }
 
 /** "Today" / "1 day ago" / "5 days ago". */
@@ -51,6 +85,11 @@ export function errorMessage(err, fallback = 'Something went wrong. Please try a
   if (Array.isArray(detail)) return detail.map((d) => d.msg).filter(Boolean).join(', ') || fallback;
   if (typeof detail === 'string') return detail;
   return fallback;
+}
+
+/** True when the server says the requested item no longer exists. */
+export function isNotFoundError(err) {
+  return err?.response?.status === 404;
 }
 
 /** Select value ('', 'yes', 'no') -> null / true / false for an optional yes/no question. */

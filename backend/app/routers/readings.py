@@ -9,6 +9,7 @@ from app.core.alert_engine import maybe_create_alert
 from app.core.bp_classification import CONTROLLED, ELEVATED, HIGH, LOW, classify_bp
 from app.core.database import get_db
 from app.core.deps import get_timezone, require_clinician, require_patient
+from app.core.patient_context import patient_timezone
 from app.core.trend_analysis import compute_trend
 from app.models.reading import BPReading
 from app.models.user import User
@@ -67,6 +68,7 @@ def create_reading(
     payload: BPReadingCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_patient),
+    tz: tzinfo = Depends(get_timezone),
 ):
     reading = BPReading(
         patient_id=current_user.user_id,
@@ -84,7 +86,7 @@ def create_reading(
     # Re-evaluate the trend with this reading included, and raise an alert if
     # it pushes the patient into an elevated/high band. The alert is written in
     # the SAME transaction as the reading, so the two can never disagree.
-    trend = compute_trend(db, current_user.user_id, period_days=ALERT_WINDOW_DAYS)
+    trend = compute_trend(db, current_user.user_id, period_days=ALERT_WINDOW_DAYS, tz=tz)
     maybe_create_alert(db, current_user.user_id, trend.status, period_days=ALERT_WINDOW_DAYS)
 
     db.commit()
@@ -137,9 +139,8 @@ def get_patient_trend(
     period_days: int = Query(default=7, ge=1, le=365),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_clinician),
-    tz: tzinfo = Depends(get_timezone),
 ):
-    return compute_trend(db, patient_id, period_days, tz=tz)
+    return compute_trend(db, patient_id, period_days, tz=patient_timezone(db, patient_id))
 
 
 @router.delete("/{reading_id}", status_code=status.HTTP_204_NO_CONTENT)

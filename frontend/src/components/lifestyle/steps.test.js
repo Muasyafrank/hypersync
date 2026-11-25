@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
-import { buildFactorPayload, DATA_STEPS, describeAnswer, normaliseAnswer, STEPS } from './steps.js';
+import { buildFactorPayload, DATA_STEPS, describeAnswer, getVisibleSteps, normaliseAnswer, STEPS } from './steps.js';
 
 const byKey = (key) => STEPS.find((step) => step.key === key);
 
@@ -45,6 +45,15 @@ describe('buildFactorPayload', () => {
     const block = source.match(/FACTOR_FIELDS\s*=\s*\(([\s\S]*?)\)/)[1];
     const backend = [...block.matchAll(/"([a-z_]+)"/g)].map((match) => match[1]);
     assert.deepEqual(DATA_STEPS.map((step) => step.key).sort(), backend.sort());
+  });
+});
+
+describe('medication questions', () => {
+  it('only asks whether medication was taken when medication is prescribed', () => {
+    const withoutMedication = getVisibleSteps({ medication_prescribed: false });
+    const withMedication = getVisibleSteps({ medication_prescribed: true });
+    assert.equal(withoutMedication.some((step) => step.key === 'medication_taken'), false);
+    assert.equal(withMedication.some((step) => step.key === 'medication_taken'), true);
   });
 });
 

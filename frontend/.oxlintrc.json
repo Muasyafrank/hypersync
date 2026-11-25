@@ -7,7 +7,7 @@
       "warn",
       {
         "allowConstantExport": true,
-        "allowExportNames": ["useAuth", "useToast", "useConfirm"]
+        "allowExportNames": ["useAuth", "useToast", "useConfirm", "useRecommendations"]
       }
     ]
   }

@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { ConfirmProvider } from './context/ConfirmContext';
+import { RecommendationsProvider } from './context/RecommendationsContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import Loader from './components/ui/Loader';
 import { roleHome } from './utils/format';
@@ -17,6 +18,7 @@ const LogReading = lazy(() => import('./pages/LogReading'));
 const Trend = lazy(() => import('./pages/Trend'));
 const Lifestyle = lazy(() => import('./pages/Lifestyle'));
 const Alerts = lazy(() => import('./pages/Alerts'));
+const Recommendations = lazy(() => import('./pages/Recommendations'));
 const ClinicianDashboard = lazy(() => import('./pages/ClinicianDashboard'));
 const ClinicianPatientDetail = lazy(() => import('./pages/ClinicianPatientDetail'));
 const ClinicianAlerts = lazy(() => import('./pages/ClinicianAlerts'));
@@ -65,6 +67,7 @@ function AppRoutes() {
         {protectedRoute('/readings', <ReadingsHistory />, PATIENT)}
         {protectedRoute('/readings/new', <LogReading />, PATIENT)}
         {protectedRoute('/trend', <Trend />, PATIENT)}
+        {protectedRoute('/recommendations', <Recommendations />, PATIENT)}
         {protectedRoute('/lifestyle', <Lifestyle />, PATIENT)}
         {protectedRoute('/alerts', <Alerts />, PATIENT)}
 
@@ -87,7 +90,9 @@ export default function App() {
         <ConfirmProvider>
           <AuthProvider>
             <BrowserRouter>
-              <AppRoutes />
+              <RecommendationsProvider>
+                <AppRoutes />
+              </RecommendationsProvider>
             </BrowserRouter>
           </AuthProvider>
         </ConfirmProvider>

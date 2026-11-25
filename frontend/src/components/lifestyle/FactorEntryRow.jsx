@@ -23,7 +23,7 @@ function YesNoTag({ label, value }) {
  * One saved lifestyle entry — plain text throughout. Shows a delete button
  * only when `onDelete` is given, so clinicians (read-only) reuse the same row.
  */
-export default function FactorEntryRow({ entry, onDelete }) {
+export default function FactorEntryRow({ entry, onDelete, deleting = false }) {
   return (
     <DataRow
       trailing={
@@ -33,6 +33,7 @@ export default function FactorEntryRow({ entry, onDelete }) {
             className="hs-icon-action hs-icon-action-danger"
             onClick={onDelete}
             aria-label={`Delete entry from ${formatFullDate(entry.logged_date)}`}
+            disabled={deleting}
           >
             <X size={18} />
           </button>
@@ -51,7 +52,10 @@ export default function FactorEntryRow({ entry, onDelete }) {
         <YesNoTag label="Smoked" value={entry.smoked} />
         {entry.physical_activity_minutes != null && <span>Activity: {entry.physical_activity_minutes} min</span>}
         <YesNoTag label="Diet followed" value={entry.diet_adherence} />
-        <YesNoTag label="Meds taken" value={entry.medication_taken} />
+        <YesNoTag label="Medication prescribed" value={entry.medication_prescribed} />
+        {entry.medication_prescribed !== false && (
+          <YesNoTag label="Medication taken" value={entry.medication_taken} />
+        )}
         <LevelTag label="Temperature" level={entry.temperature_feel} />
         <LevelTag label="Noise" level={entry.noise_level} />
       </div>

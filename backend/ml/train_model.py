@@ -4,18 +4,16 @@ Trains HyperSync's risk model on Kenya STEPS 2015 (KNBS/MoH/WHO, n=4,500).
 Target: AT-RISK = Elevated or High blood pressure (same thresholds as
 app/core/bp_classification.py) vs NOT-AT-RISK.
 
-What changed in v3 and why (numbers in ml/README.md):
-  * The deployed model is a logistic regression with a smooth age curve, not a
-    random forest. Accuracy is the same within noise (all models sit at the
-    ceiling of the available features), but its probabilities are calibrated.
-    The old forest, trained with class_weight="balanced", over-stated risk
-    (mean prediction 48% vs 42% actual), and that number was shown to patients.
-  * Evaluation uses repeated 5-fold cross-validation on all data. A single
-    884-row test split has a standard error of about +/-0.018 AUC, which is
-    larger than most differences between candidate models.
+What the published model does (numbers in ml/README.md):
+  * The deployed model is a logistic regression with a smooth age curve. Its
+    candidate-model comparison and calibration are recorded in the committed
+    metrics artefacts.
+  * Evaluation uses repeated 5-fold cross-validation on all data. A separate
+    857-row hold-out split is retained as a secondary check.
   * It stores each lifestyle factor's ADJUSTED effect (odds ratio with a 95%
-    bootstrap interval). The engine uses these instead of random-forest
-    importance, which wrongly ranked physical activity second only to age.
+    bootstrap interval). The engine uses those intervals, rather than tree
+    feature importance, when deciding whether survey evidence supports a
+    particular source label.
 
 This is a cross-sectional survey: it shows association at one point in time,
 not that changing a factor will change a given person's blood pressure.
@@ -26,8 +24,9 @@ Run from backend/:
 """
 
 import argparse
+import hashlib
 import json
-import os
+from pathlib import Path
 
 import joblib
 import matplotlib
@@ -43,12 +42,21 @@ from sklearn.model_selection import RepeatedStratifiedKFold, StratifiedKFold, cr
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import SplineTransformer, StandardScaler
 
+from ml.model_contract import CHECKSUM_FILENAMES, MODEL_FILENAMES, MODEL_VERSIONS
 from ml.steps_pipeline import BMI_FEATURE_COLUMNS, FEATURE_COLUMNS, build_dataset
 
 MODEL_DIR = "ml/models"
 ARTIFACT_DIR = "ml/artifacts"
 DATA_PATH = "data/2015_STEPS_Data.sav"
-LABEL_ORDER = ["not_at_risk", "at_risk"]
+CLASSIFICATION_LABEL_ORDER = ["not_at_risk", "at_risk"]
+CLASSIFICATION_THRESHOLDS = {
+    "low_systolic": 90,
+    "low_diastolic": 60,
+    "high_systolic": 150,
+    "high_diastolic": 90,
+    "elevated_systolic": 135,
+    "elevated_diastolic": 85,
+}
 CONTINUOUS = {"age", "activity_minutes", "salt_score", "bmi", "pulse"}
 EFFECT_FEATURES = ["salt_score", "alcohol_consumed", "activity_minutes", "diet_adherence", "smoked", "bmi"]
 # feature -> (label, divisor so odds ratios are per a meaningful unit)
@@ -168,7 +176,7 @@ def adjusted_effects(df, columns):
     }
 
 
-def save_charts(effects, proba, y, cm):
+def save_charts(effects, proba, y, cm, output_dir):
     names = list(effects)
     fig, ax = plt.subplots(figsize=(8, 0.55 * len(names) + 1.6))
     for i, name in enumerate(names):
@@ -185,7 +193,7 @@ def save_charts(effects, proba, y, cm):
     ax.set_xlabel("Adjusted odds ratio of elevated/high BP (95% CI). Grey = no clear effect")
     ax.set_title("Adjusted effects, Kenya STEPS 2015")
     fig.tight_layout()
-    fig.savefig(f"{ARTIFACT_DIR}/effects.png", dpi=160)
+    fig.savefig(output_dir / "effects.png", dpi=160)
     plt.close(fig)
 
     bins = np.quantile(proba, np.linspace(0, 1, 11))
@@ -199,13 +207,13 @@ def save_charts(effects, proba, y, cm):
     ax.set_ylabel("Observed share at risk")
     ax.set_title("Calibration (out-of-fold, deciles)")
     fig.tight_layout()
-    fig.savefig(f"{ARTIFACT_DIR}/calibration.png", dpi=160)
+    fig.savefig(output_dir / "calibration.png", dpi=160)
     plt.close(fig)
 
     fig, ax = plt.subplots(figsize=(5.5, 5))
     ax.imshow(cm, cmap="Greens")
-    ax.set_xticks(range(2), LABEL_ORDER, rotation=45)
-    ax.set_yticks(range(2), LABEL_ORDER)
+    ax.set_xticks(range(2), CLASSIFICATION_LABEL_ORDER, rotation=45)
+    ax.set_yticks(range(2), CLASSIFICATION_LABEL_ORDER)
     ax.set_xlabel("Predicted")
     ax.set_ylabel("Actual")
     ax.set_title("Hold-out confusion matrix")
@@ -213,7 +221,7 @@ def save_charts(effects, proba, y, cm):
         for j in range(2):
             ax.text(j, i, cm[i][j], ha="center", va="center", color="white" if cm[i][j] > np.max(cm) / 2 else "black")
     fig.tight_layout()
-    fig.savefig(f"{ARTIFACT_DIR}/confusion_matrix.png", dpi=160)
+    fig.savefig(output_dir / "confusion_matrix.png", dpi=160)
     plt.close(fig)
 
 
@@ -223,8 +231,13 @@ def main():
     args = parser.parse_args()
     columns = FEATURE_COLUMNS if args.features == "current" else BMI_FEATURE_COLUMNS
 
-    os.makedirs(MODEL_DIR, exist_ok=True)
-    os.makedirs(ARTIFACT_DIR, exist_ok=True)
+    model_dir = Path(MODEL_DIR)
+    artifact_dir = Path(ARTIFACT_DIR) / ("bmi" if args.features == "bmi" else "")
+    model_filename = MODEL_FILENAMES[args.features]
+    checksum_filename = CHECKSUM_FILENAMES[args.features]
+    model_version = MODEL_VERSIONS[args.features]
+    model_dir.mkdir(parents=True, exist_ok=True)
+    artifact_dir.mkdir(parents=True, exist_ok=True)
 
     print("Loading and cleaning Kenya STEPS 2015 data...")
     df = build_dataset(DATA_PATH)
@@ -278,8 +291,10 @@ def main():
 
     metrics = {
         "data_source": "Kenya STEPS NCD Risk Factor Survey 2015 (KNBS/MoH/WHO)",
+        "model_version": model_version,
         "feature_set": args.features,
         "features": columns,
+        "classification_thresholds": CLASSIFICATION_THRESHOLDS,
         "n_total": int(len(df)),
         "at_risk_share": float(y.mean()),
         "cv_comparison": cv_results,
@@ -287,9 +302,9 @@ def main():
         "holdout": hold,
         "effects": effects,
     }
-    with open(f"{ARTIFACT_DIR}/metrics.json", "w") as f:
+    with open(artifact_dir / "metrics.json", "w") as f:
         json.dump(metrics, f, indent=2)
-    with open(f"{ARTIFACT_DIR}/classification_report.txt", "w") as f:
+    with open(artifact_dir / "classification_report.txt", "w") as f:
         f.write(f"Kenya STEPS 2015, n={len(df)}, features={columns}\n\n")
         for name, r in cv_results.items():
             f.write(f"{name:22s} CV AUC {r['auc_mean']:.3f} +/- {r['auc_se']:.3f}  Brier {r['brier_mean']:.4f}\n")
@@ -298,8 +313,9 @@ def main():
             f"specificity {hold['specificity']:.2f}, AUC {hold['auc']:.3f}\n"
         )
 
-    save_charts(effects, oof_proba, y.to_numpy(), cm)
+    save_charts(effects, oof_proba, y.to_numpy(), cm, artifact_dir)
 
+    model_path = model_dir / model_filename
     joblib.dump(
         {
             "model": final,
@@ -307,15 +323,20 @@ def main():
             "feature_columns": columns,
             "feature_medians": medians,
             "effects": effects,
-            "label_order": LABEL_ORDER,
+            "label_order": [str(label) for label in final.classes_],
             "metrics": metrics,
             "data_source": "Kenya STEPS NCD Risk Factor Survey 2015",
-            "version": "3.0.0-steps-logit",
+            "training_command": f"python -m ml.train_model --features {args.features}",
+            "pipeline": "ml/steps_pipeline.py",
+            "version": model_version,
         },
-        f"{MODEL_DIR}/bp_status_model.joblib",
+        model_path,
     )
-    print(f"\nSaved model   -> {MODEL_DIR}/bp_status_model.joblib")
-    print(f"Saved reports -> {ARTIFACT_DIR}/ (metrics.json, effects.png, calibration.png, confusion_matrix.png)")
+    digest = hashlib.sha256(model_path.read_bytes()).hexdigest()
+    (model_dir / checksum_filename).write_text(f"{digest}  {model_filename}\n", encoding="utf-8")
+    print(f"\nSaved model   -> {model_path}")
+    print(f"SHA-256       -> {digest}")
+    print(f"Saved reports -> {artifact_dir}/ (metrics.json, effects.png, calibration.png, confusion_matrix.png)")
 
 
 if __name__ == "__main__":

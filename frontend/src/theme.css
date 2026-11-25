@@ -44,6 +44,24 @@ body {
   font-weight: 600;
 }
 
+/* Keep the existing visual scale while using semantic heading levels. */
+.hs-page-header .hs-title {
+  font-size: 2rem;
+}
+
+.hs-panel-header .hs-title {
+  font-size: 1.25rem;
+}
+
+.hs-auth-title,
+.hs-error-title {
+  font-size: 1.5rem;
+}
+
+.hs-modal-title {
+  font-size: 1.25rem;
+}
+
 .hs-subtitle {
   color: var(--hs-text-muted);
   font-size: 0.95rem;
@@ -861,6 +879,54 @@ button.hs-reading-row {
   color: var(--hs-navy);
 }
 
+.hs-chart-summary {
+  color: var(--hs-text-muted);
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+}
+
+.hs-chart-data {
+  margin-top: 0.75rem;
+  color: var(--hs-text-muted);
+  font-size: 0.85rem;
+}
+
+.hs-chart-data summary {
+  color: var(--hs-teal-dark);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.hs-chart-table-wrap {
+  margin-top: 0.75rem;
+  overflow-x: auto;
+}
+
+.hs-chart-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--hs-navy);
+  background-color: var(--hs-surface);
+}
+
+.hs-chart-data-table caption {
+  text-align: left;
+  font-weight: 600;
+  padding-bottom: 0.5rem;
+}
+
+.hs-chart-data-table th,
+.hs-chart-data-table td {
+  border: 1px solid var(--hs-border);
+  padding: 0.5rem 0.65rem;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.hs-chart-data-table thead th {
+  background-color: var(--hs-surface-hover);
+}
+
 /* ---------- Donut chart centre label (Dashboard) ---------- */
 
 .hs-donut-centre {
@@ -1227,3 +1293,51 @@ button.hs-reading-row {
 /* "How did you measure?" group on the log-reading form */
 .hs-conditions { border: 0; padding: 0; min-width: 0; }
 .hs-conditions legend { float: none; width: auto; padding: 0; margin-bottom: 0.5rem; }
+
+/* Treatment review (clinician only) */
+.hs-review-panel { border-left: 4px solid var(--hs-border); }
+.hs-review-panel.is-priority { border-left-color: #DC2626; }
+.hs-review-panel.is-routine { border-left-color: #CA8A04; }
+.hs-review-panel.is-paused { border-left-color: #94A3B8; }
+
+.hs-review-headline { margin-bottom: 1rem; color: var(--hs-navy); line-height: 1.5; }
+.hs-review-list { margin: 0.25rem 0 1rem; padding-left: 1.1rem; color: var(--hs-navy); font-size: 0.92rem; }
+.hs-review-list li { margin-bottom: 0.25rem; }
+
+.hs-review-weeks { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.6rem; }
+.hs-review-week {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  align-items: flex-start;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--hs-border);
+  border-radius: var(--hs-radius-md);
+}
+.hs-review-week-value { font-weight: 600; font-size: 1.05rem; color: var(--hs-navy); }
+.hs-review-history { margin-top: 1rem; }
+@media (max-width: 575.98px) { .hs-review-weeks { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.hs-review-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.hs-review-badge.is-routine { background: #FEF3C7; color: #92400E; }
+.hs-review-badge.is-priority { background: #FEE2E2; color: #991B1B; }
+
+/* Recommendations tab */
+.hs-rec-updated {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 2rem;
+  color: var(--hs-text-muted);
+  font-size: 0.85rem;
+}

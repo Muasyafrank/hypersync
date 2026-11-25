@@ -35,6 +35,7 @@ export default function Register() {
         password: values.password,
         date_of_birth: values.date_of_birth || null,
         sex: values.sex || null,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Africa/Nairobi',
       });
 
       // Log straight in so the patient lands on their dashboard.

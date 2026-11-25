@@ -1,7 +1,7 @@
 import enum
 import uuid
 
-from sqlalchemy import Boolean, Column, Date, DateTime, Enum, Float, ForeignKey, Integer
+from sqlalchemy import Boolean, Column, Date, DateTime, Enum, Float, ForeignKey, Integer, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import backref, relationship
 from sqlalchemy.sql import func
@@ -36,12 +36,22 @@ class NoiseLevel(str, enum.Enum):
 
 class EnvironmentalFactor(Base):
     __tablename__ = "environmental_factors"
+    __table_args__ = (
+        UniqueConstraint(
+            "patient_id",
+            "logged_date",
+            name="uq_environmental_factors_patient_logged_date",
+        ),
+    )
 
     factor_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     patient_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True)
     stress_level = Column(Enum(StressLevel, name="stresslevel"), nullable=True)
     sleep_hours = Column(Float, nullable=True)
     diet_adherence = Column(Boolean, nullable=True)
+    # Keep "takes prescribed medication" separate from "took it today" so a
+    # patient without medication is not counted as non-adherent.
+    medication_prescribed = Column(Boolean, nullable=True)
     medication_taken = Column(Boolean, nullable=True)
     salt_intake = Column(Enum(IntakeLevel, name="intakelevel"), nullable=True)
     caffeine_intake = Column(Enum(IntakeLevel, name="intakelevel"), nullable=True)

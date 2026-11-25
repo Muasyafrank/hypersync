@@ -30,10 +30,10 @@ class TestTheData:
     def test_it_is_deterministic(self):
         assert build_demo_data(TODAY) == build_demo_data(TODAY)
 
-    def test_six_patients_with_unique_accounts(self):
+    def test_seven_patients_with_unique_accounts(self):
         personas = build_demo_data(TODAY)
-        assert len(personas) == 6
-        assert len({p.email for p in personas}) == 6
+        assert len(personas) == 7
+        assert len({p.email for p in personas}) == 7
 
     def test_every_patient_has_a_reading_on_each_of_the_30_days(self):
         for p in build_demo_data(TODAY):
@@ -42,8 +42,8 @@ class TestTheData:
     def test_values_are_physiologically_sensible(self):
         for p in build_demo_data(TODAY):
             for r in p.readings:
-                assert 90 <= r.systolic <= 220, (p.email, r)
-                assert 50 <= r.diastolic <= 130 and r.diastolic <= r.systolic - 25, (p.email, r)
+                assert 70 <= r.systolic <= 220, (p.email, r)
+                assert 40 <= r.diastolic <= 130 and r.diastolic <= r.systolic - 25, (p.email, r)
                 assert r.heart_rate is None or 40 <= r.heart_rate <= 120
 
     @pytest.mark.parametrize("hour", [0, 3, 7, 13, 23])
@@ -116,7 +116,8 @@ class TestWhatEachPatientSees:
         assert finding["source"] == "pattern"
         assert "higher than the" in finding["message"]
         assert recs.index(finding) == 2  # straight after the summary and readings lines
-        assert "look healthy" in text(recs)  # her habits are not the explanation
+        assert "no risky pattern is visible" in text(recs)
+        assert "other factors may still matter" in text(recs)
 
     def test_james_gets_noise_and_cold_findings(self, client, demo):
         people, headers_for = demo
@@ -131,7 +132,7 @@ class TestWhatEachPatientSees:
         assert status_for(client, h) == "high"
         assert [a["alert_type"] for a in client.get("/alerts/me", headers=h).json()] == ["high_trend"]
         said = text(advice_for(client, h))
-        assert "missed medication" in said
+        assert "medication was not taken as advised" in said
         assert "you have 2 so far" in said
 
     def test_daniel_never_loses_smoking_or_medication_to_the_cap(self, client, demo):
@@ -140,14 +141,65 @@ class TestWhatEachPatientSees:
         recs = advice_for(client, h)
         said = text(recs)
         assert status_for(client, h) == "high"
-        assert "smoking" in said and "missed medication" in said
+        assert "smoking" in said and "medication was not taken as advised" in said
         assert "also worth attention" in said
         assert not [r for r in recs if r["source"] == "pattern"]  # no good days to compare with
 
-    def test_the_clinician_sees_all_six_patients(self, client, demo):
+    def test_joseph_low_pressure_gets_the_low_advice(self, client, demo):
+        people, headers_for = demo
+        h = headers_for(people["joseph"].email)
+        assert status_for(client, h) == "low"
+        assert "low side" in text(advice_for(client, h))
+
+    def test_the_clinician_sees_all_seven_patients(self, client, demo):
         _, headers_for = demo
         patients = client.get("/users/patients/summary", headers=headers_for(CLINICIAN_EMAIL)).json()
-        assert len(patients) >= 6
+        assert len(patients) >= 7
+
+
+class TestTreatmentReviewFlags:
+    """What the clinician's flag shows for each demo patient."""
+
+    def flag(self, client, demo, name):
+        people, headers_for = demo
+        clinician = headers_for(CLINICIAN_EMAIL)
+        rows = {r["email"]: r for r in client.get("/users/patients/summary", headers=clinician).json()}
+        row = rows[people[name].email]
+        detail = client.get(f"/treatment-review/patients/{row['user_id']}", headers=clinician).json()
+        return row["treatment_review"], detail
+
+    def test_grace_is_not_flagged(self, client, demo):
+        badge, detail = self.flag(client, demo, "grace")
+        assert badge is None and not detail["flagged"]
+
+    def test_amina_is_priority_with_adherence_unknown(self, client, demo):
+        badge, detail = self.flag(client, demo, "amina")
+        assert badge == {"kind": "sustained_elevated_high", "level": "priority"}
+        assert detail["adherence"]["status"] == "unknown"
+        assert "confirm what medication, if any" in detail["headline"]
+
+    def test_daniel_is_priority_with_poor_adherence(self, client, demo):
+        badge, detail = self.flag(client, demo, "daniel")
+        assert badge["level"] == "priority" and detail["adherence"]["status"] == "poor"
+        assert "explore adherence support and other causes" in detail["headline"]
+
+    @pytest.mark.parametrize("name", ["peter", "james"])
+    def test_peter_and_james_persist_despite_full_adherence(self, client, demo, name):
+        badge, detail = self.flag(client, demo, name)
+        assert badge == {"kind": "sustained_elevated_high", "level": "routine"}
+        assert detail["adherence"]["status"] == "good"
+        assert "does not rule out other causes" in detail["headline"]
+
+    def test_mary_carries_a_measurement_caution(self, client, demo):
+        badge, detail = self.flag(client, demo, "mary")
+        assert badge is not None and detail["measurement"]["caution"]
+        assert "confirm technique" in detail["headline"]
+
+    def test_joseph_is_flagged_in_the_other_direction(self, client, demo):
+        badge, detail = self.flag(client, demo, "joseph")
+        assert badge == {"kind": "sustained_low", "level": "routine"}
+        assert "low band" in detail["headline"]
+        assert "Review possible causes" in detail["headline"]
 
 
 class TestSeeding:
@@ -184,4 +236,4 @@ def test_csv_export_matches_the_data(tmp_path):
         assert len(list(csv.DictReader(fh))) == sum(len(p.factors) for p in personas)
     with guide.open(encoding="utf-8") as fh:
         rows = list(csv.DictReader(fh))
-    assert len(rows) == 7 and {r["password"] for r in rows} == {DEMO_PASSWORD}
+    assert len(rows) == 8 and {r["password"] for r in rows} == {DEMO_PASSWORD}

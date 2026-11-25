@@ -5,7 +5,7 @@ in ml_recommendation_engine.py feeds them the logged entries and daily readings.
 
 Three ideas:
 
-1. **Every logged habit is covered.** Nine things can be logged; each has one
+1. **Every logged habit is covered.** Eleven things can be logged; each has one
    rule for "this points the unhealthy way" (RISK_PREDICATES) and one concrete
    tip for avoiding it (TIPS). Nothing that is logged is silently ignored.
 
@@ -66,7 +66,7 @@ RISK_TEXT = {
     "sleep_hours": "Under 6 hours",
     "stress_level": "High",
     "caffeine_intake": "High",
-    "medication_taken": "Missed a dose",
+    "medication_taken": "Medication not taken as advised",
     "temperature_feel": "Cold",
     "noise_level": "Loud",
 }
@@ -95,7 +95,7 @@ RULE_MESSAGES = {
     "caffeine_intake": (
         "You've logged a lot of coffee or tea. Caffeine can push blood pressure up for a few hours after each cup."
     ),
-    "medication_taken": "You've logged a missed medication dose. Missing doses can lead to higher readings.",
+    "medication_taken": "You've logged that your medication was not taken as advised. Not taking medication can be associated with higher readings.",
     "temperature_feel": "You've logged cold weather. Cold narrows blood vessels and can push blood pressure up.",
     "noise_level": "You've logged a loud day. Ongoing loud noise is a stressor and is linked to higher blood pressure.",
 }
@@ -136,8 +136,7 @@ TIPS = {
         "before measuring your blood pressure."
     ),
     "medication_taken": (
-        "Take it at the same time each day, set a phone reminder, never double up after a missed dose, and "
-        "tell your clinician if you keep missing doses."
+        "Set a phone reminder and tell your clinician if your medication is repeatedly not taken as advised."
     ),
     "temperature_feel": (
         "Dress in warm layers (head, hands and feet especially), warm up indoors before measuring, and avoid "
@@ -159,7 +158,7 @@ DESCRIPTIONS = {
     "sleep_hours": ("slept under 6 hours", "slept 6 hours or more"),
     "stress_level": ("logged high stress", "logged lower stress"),
     "caffeine_intake": ("had a lot of coffee or tea", "had less coffee or tea"),
-    "medication_taken": ("missed your medicine", "took your medicine"),
+    "medication_taken": ("did not take medication as advised", "took medication as advised"),
     "temperature_feel": ("logged cold weather", "logged mild or hot weather"),
     "noise_level": ("had a loud day", "had a quiet or moderate day"),
 }
@@ -173,7 +172,7 @@ LABELS = {
     "sleep_hours": "sleep",
     "stress_level": "stress",
     "caffeine_intake": "coffee or tea",
-    "medication_taken": "missed medicine",
+    "medication_taken": "medication not taken",
     "temperature_feel": "cold weather",
     "noise_level": "noise",
 }
@@ -197,7 +196,7 @@ def summarize_log(entries) -> dict[str, FieldHistory]:
     """Per logged field, which days were answered and which were risky.
 
     A day counts as risky if ANY entry that day was. `entries` need only have
-    `logged_date` and the nine field attributes (None = not answered).
+    `logged_date` and the eleven field attributes (None = not answered).
     """
     history = {name: FieldHistory() for name in RISK_PREDICATES}
     for entry in entries:
@@ -378,7 +377,7 @@ def build_advice(
 
     Each item is {"message", "source"} with source "pattern" (from the
     patient's own readings), "model" (the survey data supports it) or "rule"
-    (general clinical guidance). Order: how the readings were taken, own patterns, missed medication, the
+    (general clinical guidance). Order: how the readings were taken, own patterns, medication not taken, the
     survey-ranked habits (smoking first among them), then the remaining guidance
     rules. Anything beyond `limit` is summarised in one closing line rather than dropped.
     """
@@ -398,14 +397,24 @@ def build_advice(
 
     current = [p for p in personal_patterns(history, daily_systolic) if p.field in flagged]
     for group in group_patterns(current):
-        advice.append({"message": pattern_message(group), "source": "pattern"})
+        advice.append(
+            {
+                "message": pattern_message(group),
+                "source": "pattern",
+                "fields": [pattern.field for pattern in group],
+            }
+        )
         covered.update(p.field for p in group)
 
     def rule_item(name):
-        return {"message": RULE_MESSAGES[name] + " " + TIPS[name] + RULE_PROVENANCE, "source": "rule"}
+        return {
+            "message": RULE_MESSAGES[name] + " " + TIPS[name] + RULE_PROVENANCE,
+            "source": "rule",
+            "fields": [name],
+        }
 
     if "medication_taken" in flagged and "medication_taken" not in covered:
-        advice.append({**rule_item("medication_taken"), "field": "medication_taken"})
+        advice.append(rule_item("medication_taken"))
         covered.add("medication_taken")
 
     model_values = {
@@ -425,26 +434,45 @@ def build_advice(
                 + TIPS[name]
                 + (DATA_SUPPORTED_SUFFIX if ranked["data_supported"] else ""),
                 "source": "model" if ranked["data_supported"] else "rule",
-                "field": name,
+                "fields": [name],
             }
         )
         covered.add(name)
 
     for name in RULE_ORDER:
         if name in flagged and name not in covered:
-            advice.append({**rule_item(name), "field": name})
+            advice.append(rule_item(name))
             covered.add(name)
 
-    shown, cut = advice[:limit], advice[limit:]
-    if cut:
-        # Never drop a logged habit without saying so.
-        labels = _join([LABELS[item["field"]] for item in cut if "field" in item])
-        shown.append(
+    if limit <= 0:
+        return []
+
+    if len(advice) <= limit:
+        shown = advice
+    else:
+        # Keep the advice limit meaningful by reserving one slot for a complete
+        # overflow item. It names every cut habit *and* carries its concrete
+        # action, so a habit is never reduced to a label without guidance.
+        visible = advice[: max(limit - 1, 0)]
+        cut = advice[max(limit - 1, 0) :]
+        cut_fields = []
+        for item in cut:
+            for name in item.get("fields", []):
+                if name not in cut_fields:
+                    cut_fields.append(name)
+        labels = _join([LABELS[name] for name in cut_fields]) if cut_fields else "your measurement technique"
+        details = " ".join(item["message"] for item in cut)
+        cut_sources = {item.get("source", "rule") for item in cut}
+        overflow_source = next(iter(cut_sources)) if len(cut_sources) == 1 else "mixed"
+        shown = [
+            *visible,
             {
-                "message": f"Also worth attention from your log: {labels}. Your Lifestyle page lists everything you've logged.",
-                "source": "rule",
-            }
-        )
+                "message": f"Also worth attention from your log: {labels}. {details}",
+                "source": overflow_source,
+            },
+        ]
+
     for item in shown:
         item.pop("field", None)
+        item.pop("fields", None)
     return shown

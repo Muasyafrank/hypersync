@@ -6,6 +6,7 @@ import Layout from '../components/Layout';
 import { FormField, PageHeader } from '../components/ui';
 import { useForm } from '../hooks/useForm';
 import { useSubmit } from '../hooks/useSubmit';
+import { useRecommendations } from '../context/RecommendationsContext';
 import { useToast } from '../context/ToastContext';
 import { createReading } from '../api/readings';
 import { classifyBP, statusInfo, STATUS_NOTES } from '../utils/bpStatus';
@@ -77,6 +78,7 @@ function MeasurementInput({ id, name, label, icon: Icon, iconColor, unit, value,
 export default function LogReading() {
   const navigate = useNavigate();
   const toast = useToast();
+  const { dataChanged } = useRecommendations();
 
   const { values, handleChange } = useForm({
     systolic: '',
@@ -105,8 +107,16 @@ export default function LogReading() {
         rested_before: toTriState(values.rested_before),
         stimulant_before: toTriState(values.stimulant_before),
       });
-      toast.success(`Reading saved — ${statusInfo(created.status).label} status recorded.`);
-      navigate('/readings');
+      // Recompute the advice from the new reading and wait for it, so the page we land on is already current.
+      const refreshed = await dataChanged();
+      if (refreshed) {
+        toast.success(`Reading saved: ${statusInfo(created.status).label} status recorded. Your recommendations are up to date.`);
+      } else {
+        toast.warning('Reading saved, but recommendations could not be refreshed. Open Recommendations to retry.');
+      }
+      navigate('/recommendations', {
+        state: refreshed ? { justUpdated: 'reading' } : undefined,
+      });
     },
     { fallback: 'Could not save reading.', onError: (message) => toast.error(message) },
   );

@@ -2,10 +2,27 @@
 
 Final year project — Dedan Kimathi University of Technology.
 
-HyperSync lets patients log blood pressure readings and daily lifestyle
-factors, classifies each reading, tracks trends over time, raises alerts
-for clinicians when a trend deteriorates, and generates recommendations
-from a model trained on the Kenya STEPS 2015 NCD survey.
+HyperSync lets patients **manually enter** blood-pressure readings and daily
+lifestyle factors, classifies each reading, tracks trends over time, places
+trend alerts in a clinician review queue, and generates recommendations from
+the patient's own log and a model trained on the Kenya STEPS 2015 NCD survey.
+
+## Scope and safety boundary
+
+- HyperSync is **manual-input only** in this version. It does not connect to a
+  blood-pressure monitor, ingest device data, or send clinical alerts to a
+  phone.
+- The current bands are checked in this order: **low** below 90 systolic or 60
+  diastolic; otherwise **high** at 150 systolic or 90 diastolic or above;
+  otherwise **elevated** at 135 systolic or 85 diastolic or above. There is
+  deliberately **no `180/110` urgent tier** and no emergency protocol;
+  authorised clinical input is required before adding one.
+- The advice and thresholds are a **clinically reviewable prototype**, not
+  approved clinical guidance. The review sheet is deliberately unsigned:
+  `docs/advice-for-clinical-review.md`.
+- The survey model supplies a population estimate as context. It is not a
+  diagnosis, an individual risk forecast, or evidence that the app improves
+  clinical outcomes.
 
 ## Structure
 
@@ -18,9 +35,10 @@ backend/          FastAPI + PostgreSQL + SQLAlchemy
     schemas/      Pydantic request/response models
     routers/      HTTP endpoints, grouped by resource
   alembic/        database migrations
-  ml/             STEPS data pipeline, training script, model artefacts
+  ml/             STEPS data pipeline, training script, versioned model +
+                  checksum/model card
   scripts/        admin/clinician provisioning, test-data seeding
-  data/           STEPS survey (.sav) and the seed workbook
+  data/           local raw survey data (not versioned) and the seed workbook
   tests/          pytest suite (unit tests + API tests on throw-away SQLite)
 
 frontend/         React 19 + Vite + React-Bootstrap + Recharts
@@ -43,7 +61,7 @@ frontend/         React 19 + Vite + React-Bootstrap + Recharts
 | Role | Can do |
 | --- | --- |
 | Patient | Log readings and lifestyle entries, view own trends, alerts and recommendations |
-| Clinician | View all patients, their readings, trends and lifestyle factors; work the alert queue |
+| Clinician | View all patients, their readings, trends and lifestyle factors; work the alert and treatment-review queues |
 | Admin | Manage users, provision clinician accounts, reset passwords |
 
 Patients self-register. Clinician and admin accounts are provisioned by an
@@ -61,12 +79,37 @@ pip install -r requirements.txt          # add -r requirements-dev.txt for tests
 
 cp .env.example .env        # then fill in DATABASE_URL and SECRET_KEY
 alembic upgrade head
-python -m ml.train_model    # needs data/2015_STEPS_Data.sav
+# The versioned model artefact is already included; training is optional.
 
 uvicorn app.main:app --reload
 ```
 
+If the daily check-in migration reports legacy duplicate patient/day rows, it
+will stop rather than discard observations automatically. The cleanup helper
+prints every saved answer, merges complementary answers into the retained row,
+and refuses to delete a group when two rows disagree about the same field.
+Review the dry run, choose the retention rule explicitly, and retry the
+migration:
+
+```bash
+python -m scripts.cleanup_duplicate_factors
+python -m scripts.cleanup_duplicate_factors --apply --keep latest
+alembic upgrade head
+```
+
+If the helper reports a same-field conflict, provide the exact chosen value in
+a JSON resolutions file keyed by `patient-uuid/YYYY-MM-DD`, then rerun with
+`--resolutions resolutions.json`. The helper is a dry run unless `--apply` is
+supplied, and it changes nothing while any conflict is unresolved.
+
 API docs at http://localhost:8000/docs
+
+A clean checkout does not need the raw STEPS survey file for normal operation:
+the small versioned runtime model is committed under `backend/ml/models/`, with
+its checksum, model card and feature contract. Retraining is an optional
+maintenance task that additionally requires `requirements-ml.txt` and the
+separately obtained `data/2015_STEPS_Data.sav`; see
+`backend/ml/models/MODEL_CARD.md`.
 
 Provisioning and sample data (run from `backend/`):
 
@@ -74,7 +117,7 @@ Provisioning and sample data (run from `backend/`):
 python -m scripts.create_admin
 python -m scripts.create_clinician
 python -m scripts.seed_test_data        # reads data/HyperSync_Test_Data.xlsx
-python -m scripts.seed_demo_30_days     # 30 days of data for 6 demo patients + a clinician
+python -m scripts.seed_demo_30_days     # 30 days of data for 7 demo patients + a clinician
 python -m scripts.seed_demo_30_days --csv demo_out   # ...and CSV copies
 ```
 
@@ -151,9 +194,10 @@ and `NOT NULL` in the third). The API tests save a reading without a pulse.
 
 **Dates are the user's local day.** In the browser use `toLocalDateInput()`;
 never `toISOString().slice(0, 10)`, which is the UTC day and lags Kenya by 3
-hours. On the API, every request carries an `X-Timezone` header and trend
-endpoints group readings with it (`get_timezone` in `app/core/deps.py`,
-falling back to UTC).
+hours. Patient requests carry an `X-Timezone` header and trend endpoints group
+readings with it (`get_timezone` in `app/core/deps.py`, falling back to UTC).
+The patient's IANA timezone is also stored at registration, so clinician trend
+and weekly-review views use the patient's calendar rather than the clinician's.
 
 **Bootstrap is a custom build.** `src/bootstrap.scss` compiles only the
 components and utility groups the app uses (about a third of stock Bootstrap's
@@ -165,7 +209,9 @@ class the build leaves out.
 things can be logged: stress, sleep, diet, medication, salt, caffeine, alcohol,
 smoking, activity, **temperature** and **noise**. Each reading can also record
 whether it was taken **rested** and **without coffee/tea, smoking or exercise
-beforehand**. `app/core/factor_insights.py` holds the rules:
+beforehand**. The medication check distinguishes “no prescribed medication”
+from “medication not taken”, so patients without medication are not counted as
+non-adherent. `app/core/factor_insights.py` holds the rules:
 
 - every logged habit has a risk rule *and* a concrete tip (a test fails if one
   is missing);
@@ -177,17 +223,77 @@ beforehand**. `app/core/factor_insights.py` holds the rules:
   number), with the size of the gap when there are good readings to compare;
 - a patient who logs too sparsely is told exactly how many more days of both
   readings and logs unlock their own patterns;
-- anything cut for space is named, never dropped, and controlled readings still
-  get short preventive advice.
+- anything cut for space is named and retains its concrete action rather than
+  being reduced to a label; controlled and low readings still get short,
+  actionable preventive guidance.
 
-Results are cached for 12 hours per patient (`CACHE_WINDOW_HOURS`).
+**Recommendations are live.** `GET /recommendations/me` works the advice out from
+the patient's data on every request (nothing is served from a cache, and the
+response is `Cache-Control: no-store`), so a reading or lifestyle entry saved a
+moment ago is already reflected. A history batch is stored only when the advice
+actually changes, with an explicit `position` so the order never shuffles; the
+newest 30 batches are kept. In the app, `RecommendationsContext` refetches after
+every save or delete (the save screens wait for it, then open the
+**Recommendations** tab with the fresh advice), when the browser tab regains
+focus, and when the patient's other open tab saves something. The tab groups the
+advice (where you stand / what your own data shows / what to work on / keep in
+mind). Each item still carries source metadata in the API for auditability, but
+the patient-facing cards do not show provenance tags. Needs `alembic upgrade head`.
 
-**Clinical wording is reviewable in one place.** `docs/advice-for-clinical-review.md`
-lists every threshold and every piece of advice with a sign-off table. It is
-generated (`cd backend && python -m scripts.export_advice`) and a test fails if
-it drifts from the code, so a wording change can't slip in unreviewed.
+**A lifestyle check-in is one day, not a stream of clicks.** The API rejects an
+empty check-in, a future local date, and a second check-in for the same patient
+on the same day (HTTP 409). The database enforces the same daily rule, and
+legacy calculations count distinct days so duplicate rows cannot inflate
+adherence or habit patterns.
+
+**The survey estimate is qualified honestly.** When age, sex or lifestyle
+inputs are missing, the model uses its recorded training-population medians and
+the patient-facing text names the defaulted fields and says the estimate is not
+fully personalised. An unspecified sex is never presented as the patient's own
+sex. Activity above the model's 240-minute training cap is capped and the
+adjustment is disclosed. The estimate is omitted for an age outside the model's
+supported 18–100 range. If the model artefact is missing, corrupt or
+incompatible, the endpoint still works from readings and lifestyle rules and
+omits the population estimate rather than failing.
+
+**Treatment-review flag (clinicians only).** `app/core/treatment_review.py`
+splits the last 4 weeks into 7-day weeks and flags a patient whose weekly
+average remains elevated/high in 3+ judgeable weeks (or sustained *low*). These
+are application bands, not a configured clinical treatment target. It lists
+what to confirm first (what medication use was actually recorded, were
+readings taken properly, which lifestyle contributors are logged), and a
+clinician can record a review, which pauses a matching flag for a 28-day
+follow-up window. The adequacy of that window depends on the clinical context.
+The flag never suggests a drug or dose and no patient endpoint returns it (a
+test checks). The thresholds presented for review are listed on the clinical review sheet.
+It needs the `treatment_reviews` table: run `alembic upgrade head`.
+
+**Clinical wording is reviewable in one place.**
+`docs/advice-for-clinical-review.md` collects the blood-pressure bands, habit
+rules and concrete actions, measurement and personal-pattern thresholds, the
+model context, and the clinician-only treatment-review rules. It is generated
+(`cd backend && python -m scripts.export_advice`) and a test detects drift
+between the generated sections and the code. That test does **not** verify
+clinical review or sign-off. The current sheet is intentionally **unsigned**
+and must not be described as clinically approved.
+
+**The model has an explicit identity.** `backend/ml/models/MODEL_CARD.md` records
+the feature contract, data provenance, thresholds, evaluation, intended use,
+limitations, version and SHA-256 checksum. The runtime verifies the published
+checksum before unpickling the artefact, then validates its version, exact
+feature contract, input domains, labels, thresholds and effect metadata before
+using it. `SHA256SUMS` and `tests/test_model_artifact.py` keep the committed
+files consistent with that identity. The model card does not claim clinical
+benefit.
 
 **Lists ask for what they show.** The dashboard fetches 5 readings plus a
 `/readings/me/summary` count, not the whole history.
 
 **Never commit `.env`.** `.env.example` documents the required variables.
+
+## Presentation and demo
+
+`docs/supervisor-presentation-guide.md` contains the supervisor demo sequence,
+expected outcomes, evidence to show, limitations to state, and likely questions.
+It is deliberately explicit that the application is manual-input only and that
+the clinical wording remains unsigned.

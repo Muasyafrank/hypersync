@@ -7,13 +7,42 @@ import FactorEntryRow from '../components/lifestyle/FactorEntryRow';
 import ReadingConditions from '../components/ReadingConditions';
 import BPTrendChart from '../components/BPTrendChart';
 import PeriodSelect from '../components/PeriodSelect';
+import TreatmentReviewPanel from '../components/TreatmentReviewPanel';
 import { DataRow, EmptyState, ErrorState, Loader, PageHeader, Panel, StatusPill } from '../components/ui';
 import { useAsync } from '../hooks/useAsync';
-import { getPatient, getPatientFactors, getPatientReadings, getPatientTrend } from '../api/clinician';
+import {
+  getPatient,
+  getPatientFactors,
+  getPatientReadings,
+  getPatientTrend,
+  getTreatmentReview,
+} from '../api/clinician';
 import { statusInfo } from '../utils/bpStatus';
 import { formatDateTime } from '../utils/format';
 
-const EMPTY = { patient: null, readings: [], factors: [] };
+const EMPTY = { patient: null, readings: [], factors: [], factorsError: null };
+
+function TreatmentReviewSection({ patientId }) {
+  const {
+    data: review,
+    loading,
+    error,
+    reload,
+  } = useAsync(() => getTreatmentReview(patientId), [patientId]);
+
+  if (loading) {
+    return (
+      <Panel title="Treatment review" className="mb-4">
+        <Loader />
+      </Panel>
+    );
+  }
+  if (error) {
+    return <ErrorState message="Could not load the treatment-review summary." onRetry={reload} />;
+  }
+  if (!review) return null;
+  return <TreatmentReviewPanel patientId={patientId} review={review} onChanged={reload} />;
+}
 
 export default function ClinicianPatientDetail() {
   const { patientId } = useParams();
@@ -24,12 +53,14 @@ export default function ClinicianPatientDetail() {
   const { data, loading, error, reload } = useAsync(
     async () => {
       // Fetched by id rather than by listing every patient and filtering.
-      const [patient, readings, factors] = await Promise.all([
+      const [patient, readings, factorResult] = await Promise.all([
         getPatient(patientId),
         getPatientReadings(patientId),
-        getPatientFactors(patientId).catch(() => []),
+        getPatientFactors(patientId)
+          .then((factors) => ({ factors: factors ?? [], factorsError: null }))
+          .catch((error) => ({ factors: [], factorsError: error })),
       ]);
-      return { patient, readings, factors };
+      return { patient, readings, ...factorResult };
     },
     [patientId],
     EMPTY,
@@ -44,7 +75,7 @@ export default function ClinicianPatientDetail() {
     reload: reloadTrend,
   } = useAsync(() => getPatientTrend(patientId, periodDays), [patientId, periodDays]);
 
-  const { patient, readings, factors } = data ?? EMPTY;
+  const { patient, readings, factors, factorsError } = data ?? EMPTY;
 
   if (loading) return <Layout><Loader className="py-5" /></Layout>;
   if (error) {
@@ -63,6 +94,8 @@ export default function ClinicianPatientDetail() {
           subtitle={patient?.email}
           onBack={() => navigate('/clinician')}
         />
+
+        <TreatmentReviewSection key={patientId} patientId={patientId} />
 
         <Panel
           title="Blood pressure trend"
@@ -105,7 +138,9 @@ export default function ClinicianPatientDetail() {
         </Panel>
 
         <Panel title="Lifestyle &amp; environmental factors" className="mt-4">
-          {factors.length === 0 ? (
+          {factorsError ? (
+            <ErrorState message="Could not load this patient's lifestyle entries." onRetry={reload} />
+          ) : factors.length === 0 ? (
             <EmptyState message="No lifestyle entries logged yet." />
           ) : (
             factors.map((factor) => <FactorEntryRow key={factor.factor_id} entry={factor} />)

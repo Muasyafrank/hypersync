@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useId, useRef, useState } from 'react';
 import { Button, Modal } from 'react-bootstrap';
 import { AlertTriangle } from 'lucide-react';
 
@@ -14,27 +14,39 @@ const DEFAULTS = {
 
 export function ConfirmProvider({ children }) {
   const [config, setConfig] = useState(null);
-  const resolveRef = useRef(null);
+  const queueRef = useRef([]);
+  const titleId = useId();
+  const messageId = useId();
 
-  /** Resolves true if the user confirms, false if they cancel or dismiss. */
+  /**
+   * Resolves true if the user confirms, false if they cancel or dismiss.
+   * Requests are queued so one confirmation cannot replace another and leave
+   * the first caller waiting forever.
+   */
   const confirm = useCallback((options) => {
-    setConfig({ ...DEFAULTS, ...options });
     return new Promise((resolve) => {
-      resolveRef.current = resolve;
+      queueRef.current.push({ config: { ...DEFAULTS, ...options }, resolve });
+      setConfig((current) => current ?? queueRef.current[0].config);
     });
   }, []);
 
   function handleClose(result) {
-    setConfig(null);
-    resolveRef.current?.(result);
-    resolveRef.current = null;
+    const current = queueRef.current.shift();
+    setConfig(queueRef.current[0]?.config ?? null);
+    current?.resolve(result);
   }
 
   return (
     <ConfirmContext.Provider value={confirm}>
       {children}
 
-      <Modal show={Boolean(config)} onHide={() => handleClose(false)} centered>
+      <Modal
+        show={Boolean(config)}
+        onHide={() => handleClose(false)}
+        centered
+        aria-labelledby={titleId}
+        aria-describedby={messageId}
+      >
         {config && (
           <>
             <Modal.Body className="p-4">
@@ -43,8 +55,8 @@ export function ConfirmProvider({ children }) {
                   <AlertTriangle size={20} aria-hidden="true" />
                 </div>
                 <div>
-                  <h5 className="hs-title mb-2">{config.title}</h5>
-                  <p className="hs-subtitle mb-0">{config.message}</p>
+                  <h2 id={titleId} className="hs-title hs-modal-title mb-2">{config.title}</h2>
+                  <p id={messageId} className="hs-subtitle mb-0">{config.message}</p>
                 </div>
               </div>
             </Modal.Body>

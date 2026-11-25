@@ -49,9 +49,11 @@ performance or accessibility change.
   reading history — one request per patient — to display the latest one.
   New endpoint `GET /users/patients/summary` returns all patients with
   their latest reading and count in three queries total.
-- **Recommendations no longer written on every page load.** The GET
-  endpoint persisted a fresh batch each time the dashboard mounted, growing
-  the table without bound. It now reuses a batch for 12 hours.
+- **Recommendation history is bounded and stays current.** The GET endpoint
+  now regenerates advice from the patient's latest readings and lifestyle data,
+  stores a new batch only when its content changes, and keeps only the newest
+  batches per patient. Alternate 30- or 90-day views are returned without
+  being persisted.
 - **Route-level code splitting.** A patient no longer downloads the admin
   and clinician screens. Recharts (~400 kB) is a separate chunk.
 - `joinedload` on the alerts query removes a per-alert lookup for

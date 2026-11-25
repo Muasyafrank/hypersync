@@ -11,7 +11,7 @@ export default function PageHeader({ title, subtitle, action, onBack }) {
               <ArrowLeft size={20} />
             </button>
           )}
-          <h2 className="hs-title mb-0">{title}</h2>
+          <h1 className="hs-title mb-0">{title}</h1>
         </div>
         {subtitle && <p className="hs-subtitle mb-0 mt-1">{subtitle}</p>}
       </div>

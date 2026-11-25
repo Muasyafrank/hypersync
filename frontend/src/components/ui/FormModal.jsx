@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { Alert, Button, Form, Modal } from 'react-bootstrap';
 
 /**
@@ -17,11 +18,20 @@ export default function FormModal({
   onHide,
   children,
 }) {
+  const titleId = useId();
+  const descriptionId = useId();
+
   return (
-    <Modal show={show} onHide={onHide} centered>
+    <Modal
+      show={show}
+      onHide={onHide}
+      centered
+      aria-labelledby={titleId}
+      aria-describedby={description ? descriptionId : undefined}
+    >
       <Modal.Body className="p-4">
-        <h5 className={`hs-title ${description ? 'mb-1' : 'mb-3'}`}>{title}</h5>
-        {description && <p className="hs-subtitle hs-panel-description mb-3">{description}</p>}
+        <h2 id={titleId} className={`hs-title hs-modal-title ${description ? 'mb-1' : 'mb-3'}`}>{title}</h2>
+        {description && <p id={descriptionId} className="hs-subtitle hs-panel-description mb-3">{description}</p>}
 
         {error && <Alert variant="danger" role="alert">{error}</Alert>}
 

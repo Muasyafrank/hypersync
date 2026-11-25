@@ -14,8 +14,9 @@ FEATURE_COLUMNS = [
     "diet_adherence",
 ]
 
-# Adding body-mass index is the single biggest accuracy gain available
-# (see ml/README.md). Use it once the app collects height and weight:
+# An experimental BMI feature set is available for maintenance work once the
+# app collects height and weight. It is not part of the published runtime
+# contract:
 #   python -m ml.train_model --features bmi
 BMI_FEATURE_COLUMNS = FEATURE_COLUMNS + ["bmi"]
 
@@ -98,7 +99,7 @@ def classify_bp(systolic, diastolic):
         return np.nan
     if systolic < 90 or diastolic < 60:
         return "low"
-    if systolic >= 150 or diastolic >= 95:
+    if systolic >= 150 or diastolic >= 90:
         return "high"
     if systolic >= 135 or diastolic >= 85:
         return "elevated"

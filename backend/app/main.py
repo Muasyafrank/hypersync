@@ -2,11 +2,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.routers import alerts, auth, environmental_factor, readings, recommendations, users
+from app.routers import alerts, auth, environmental_factor, readings, recommendations, treatment_review, users
 
 app = FastAPI(
     title="HyperSync API",
-    description="Blood pressure monitoring and hypertension management platform.",
+    description="Manual blood-pressure logging and clinician decision-support prototype.",
     version="1.0.0",
 )
 
@@ -25,6 +25,7 @@ for router in (
     environmental_factor.router,
     recommendations.router,
     alerts.router,
+    treatment_review.router,
 ):
     app.include_router(router)
 

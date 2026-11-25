@@ -8,6 +8,10 @@ import { describe, it } from 'node:test';
 import {
   capitalize,
   errorMessage,
+  formatDayMonth,
+  formatFullDate,
+  formatShortDate,
+  formatTime,
   measurementFlags,
   NETWORK_ERROR_MESSAGE,
   pluralise,
@@ -98,5 +102,41 @@ describe('measurementFlags', () => {
     assert.deepEqual(measurementFlags({ rested_before: true, stimulant_before: false }), []);
     assert.deepEqual(measurementFlags({ rested_before: null, stimulant_before: null }), []);
     assert.deepEqual(measurementFlags(undefined), []);
+  });
+});
+
+describe('formatDayMonth', () => {
+  it('reads an ISO date as a calendar day, whatever the timezone', () => {
+    const text = formatDayMonth('2026-10-20');
+    assert.match(text, /20/);
+    assert.match(text, /Oct/);
+  });
+
+  it('falls back on missing or malformed input', () => {
+    assert.equal(formatDayMonth(undefined, '—'), '—');
+    assert.equal(formatDayMonth('not-a-date', '—'), '—');
+  });
+
+  it('does not shift an API date-only value in a UTC-negative timezone', () => {
+    const previous = process.env.TZ;
+    process.env.TZ = 'America/New_York';
+    try {
+      assert.match(formatShortDate('2026-10-20'), /20/);
+      assert.match(formatFullDate('2026-10-20'), /20/);
+      assert.doesNotMatch(formatShortDate('2026-10-20'), /19/);
+    } finally {
+      process.env.TZ = previous;
+    }
+  });
+});
+
+describe('formatTime', () => {
+  it('shows just the clock time in the user\'s timezone', () => {
+    // 11:32 UTC is 14:32 in Nairobi (UTC+3, set at the top of this file); the format follows the user's locale.
+    assert.match(formatTime(new Date('2026-11-18T11:32:00Z')), /14[:.]32|0?2[:.]32\s?pm/i);
+  });
+
+  it('falls back when there is no date', () => {
+    assert.equal(formatTime(null, '—'), '—');
   });
 });

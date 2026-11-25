@@ -29,7 +29,16 @@ export const STEPS = [
     unit: 'minutes', min: 0, max: 1440, step: 5, placeholder: 'e.g. 30', integer: true,
   },
   { key: 'diet_adherence', label: 'Diet as advised', question: 'Did you eat as your clinic advised?', type: 'bool' },
-  { key: 'medication_taken', label: 'Medicine taken', question: 'Did you take your medicine?', type: 'bool' },
+  {
+    key: 'medication_prescribed',
+    label: 'Medication prescribed',
+    question: 'Do you take any medication prescribed by a clinician?',
+    type: 'bool',
+  },
+  {
+    key: 'medication_taken', label: 'Medication taken', question: 'Did you take your medication as advised today?',
+    type: 'bool', visibleWhen: (answers) => answers.medication_prescribed === true,
+  },
   {
     key: 'temperature_feel', label: 'Temperature', question: 'How did the temperature feel today?', type: 'choice',
     options: ['cold', 'comfortable', 'hot'], labels: ['Cold', 'Comfortable', 'Hot'],
@@ -43,6 +52,11 @@ export const STEPS = [
 
 /** Steps that collect a value for the API (everything except 'when' and 'review'). */
 export const DATA_STEPS = STEPS.filter((step) => step.type !== 'when' && step.type !== 'review');
+
+/** Steps currently relevant to the answers given so far. */
+export function getVisibleSteps(answers) {
+  return STEPS.filter((step) => !step.visibleWhen || step.visibleWhen(answers));
+}
 
 /**
  * Clamp a typed number to the field's allowed range and round it if the API

@@ -4,7 +4,7 @@ import { AlertTriangle } from 'lucide-react';
 /** Inline error with an optional retry. */
 export default function ErrorState({ message = 'Something went wrong.', onRetry }) {
   return (
-    <div className="hs-empty-state">
+    <div className="hs-empty-state" role="alert">
       <AlertTriangle size={26} color="#DC2626" className="mb-2" />
       <p className="hs-subtitle mb-0">{message}</p>
       {onRetry && (

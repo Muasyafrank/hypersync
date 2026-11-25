@@ -7,9 +7,12 @@ from sqlalchemy.orm import Session
 from app.core.bp_classification import classify_bp
 from app.core.database import get_db
 from app.core.deps import require_admin, require_clinician, require_staff
+from app.core.patient_context import patient_timezones
 from app.core.security import hash_password
+from app.core.treatment_review import assess_patients
 from app.models.reading import BPReading
 from app.models.user import PatientProfile, User, UserRole
+from app.schemas.treatment_review import TreatmentReviewBrief
 from app.schemas.user import (
     ClinicianCreate,
     LatestReading,
@@ -81,9 +84,12 @@ def list_patient_summaries(
     )
     latest_by_patient = {row.patient_id: row for row in latest_rows}
 
+    reviews = assess_patients(db, patient_ids, timezones=patient_timezones(db, patient_ids))
+
     summaries = []
     for patient in patients:
         reading = latest_by_patient.get(patient.user_id)
+        review = reviews[patient.user_id]
         summaries.append(
             PatientSummaryOut(
                 user_id=patient.user_id,
@@ -98,6 +104,7 @@ def list_patient_summaries(
                 )
                 if reading
                 else None,
+                treatment_review=TreatmentReviewBrief(kind=review.kind, level=review.level) if review.active else None,
             )
         )
     return summaries
@@ -142,6 +149,7 @@ def get_user(
         if profile:
             detail.date_of_birth = profile.date_of_birth
             detail.sex = profile.sex
+            detail.timezone = profile.timezone
         detail.reading_count = (
             db.query(func.count(BPReading.reading_id)).filter(BPReading.patient_id == user.user_id).scalar()
         )

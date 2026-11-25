@@ -13,7 +13,7 @@ export default function AuthCard({ title, subtitle, maxWidth = 420, children, fo
 
         <Card className="hs-auth-card p-4">
           <Card.Body>
-            <h4 className="hs-title mb-1 text-center">{title}</h4>
+            <h1 className="hs-title hs-auth-title mb-1 text-center">{title}</h1>
             {subtitle && <p className="hs-subtitle text-center mb-4">{subtitle}</p>}
             {children}
             {footer && <div className="text-center mt-4 hs-footer-text">{footer}</div>}

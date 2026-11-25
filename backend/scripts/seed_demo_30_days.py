@@ -1,5 +1,5 @@
 """
-Seeds 30 days of realistic readings and lifestyle logs for six demo patients
+Seeds 30 days of realistic readings and lifestyle logs for seven demo patients
 (plus one clinician), each built to show a different part of the system.
 
     python -m scripts.seed_demo_30_days            # write to the database
@@ -93,7 +93,8 @@ class Persona:
     sex: str
     birth_year: int
     story: str  # what this patient's data is like
-    expect: str  # what the system should show for them
+    expect: str  # what the patient is told
+    review: str = ""  # what the clinician's treatment-review flag should show
     readings: list[ReadingRow] = field(default_factory=list)
     factors: list[FactorRow] = field(default_factory=list)
 
@@ -144,7 +145,7 @@ def _days():
 
 
 # --------------------------------------------------------------------------
-# The six patients
+# The seven patients
 # --------------------------------------------------------------------------
 
 
@@ -155,6 +156,7 @@ def grace(today: date) -> Persona:
         "demo.grace@example.com", "Grace Wanjiku", "Female", 1971,
         story="Well-controlled pressure (about 121/78), healthy habits, logs every day.",
         expect="'Controlled, keep up your routine' and no habit advice: no nagging.",
+        review='Not flagged.',
     )  # fmt: skip
     for d in _days():
         p.readings.append(_morning(rng, d, 121, 78, **PROPER))
@@ -185,6 +187,7 @@ def peter(today: date) -> Persona:
         "The two habits fall on different days.",
         expect="Elevated. Two own-data findings, one for sleep and one for salt, each with the "
         "mmHg difference. Both properly measured.",
+        review='Flagged (routine): elevated/high band for 4 of 4 weeks despite medication logged as taken every day. Lifestyle contributors listed.',
     )  # fmt: skip
     for d in _days():
         bad_sleep, high_salt = d % 3 == 0, d % 4 == 1
@@ -215,6 +218,7 @@ def mary(today: date) -> Persona:
         "measures in a hurry, straight after tea or climbing stairs, and those read about 45 mmHg higher.",
         expect="Elevated average, but the FIRST advice is about measurement technique, showing "
         "the hurried readings read ~45 mmHg higher than properly rested ones.",
+        review='Flagged (routine) but with a measurement caution: about a third of readings were hurried, so confirm technique before reviewing treatment.',
     )  # fmt: skip
     rushed_notes = ["Rushed, had just finished tea", "Measured right after climbing stairs", "In a hurry before work"]
     for d in _days():
@@ -239,6 +243,7 @@ def james(today: date) -> Persona:
         story="Works somewhere loud Monday to Friday; quiet weekends. Also has cold days every third day. "
         "Pressure is higher on both.",
         expect="Elevated. Own-data findings for noise and for cold weather, each with its mmHg gap.",
+        review='Flagged (routine): elevated/high band for 4 of 4 weeks despite full adherence; noise and cold listed.',
     )  # fmt: skip
     for d in _days():
         day = today - timedelta(days=d)
@@ -267,9 +272,10 @@ def amina(today: date) -> Persona:
     p = Persona(
         "demo.amina@example.com", "Amina Hassan", "Female", 1958,
         story="Consistently high (about 166/102) and measures twice a day, but has logged her "
-        "lifestyle only twice in 30 days (one entry says she missed her medicine).",
+        "lifestyle only twice in 30 days (one entry says her medication was not taken).",
         expect="High, with a high-trend alert. Missed-medication advice, plus a message saying "
         "exactly how many more days of logging are needed ('You have 2 so far').",
+        review='Flagged (PRIORITY): high for 4 of 4 weeks, and adherence is not logged often enough to tell, so the clinician is asked to confirm adherence first.',
     )  # fmt: skip
     for d in _days():
         p.readings.append(_morning(rng, d, 166, 102, 5, 3))
@@ -285,9 +291,10 @@ def daniel(today: date) -> Persona:
     p = Persona(
         "demo.daniel@example.com", "Daniel Mutua", "Male", 1969,
         story="High pressure (about 160/98) every day and nearly every habit is risky: smoking, "
-        "alcohol at weekends, high salt, little sleep or activity, missed doses.",
-        expect="High. Smoking and missed medicine always appear; a closing line names whatever "
+        "alcohol at weekends, high salt, little sleep or activity, and medication not taken.",
+        expect="High. Smoking and medication-not-taken always appear; a closing line names whatever "
         "didn't fit. No own-data findings, because there are no good days to compare with.",
+        review='Flagged (PRIORITY): high for 4 of 4 weeks, with medication logged as not taken on about 40% of logged days, so the clinician is prompted to confirm adherence and other causes.',
     )  # fmt: skip
     for d in _days():
         day = today - timedelta(days=d)
@@ -312,10 +319,30 @@ def daniel(today: date) -> Persona:
     return p
 
 
+def joseph(today: date) -> Persona:
+    """Consistently LOW pressure: shows the flag working in the other direction."""
+    rng = random.Random("joseph")
+    p = Persona(
+        "demo.joseph@example.com", "Joseph Mwangi", "Male", 1950,
+        story="Older patient whose pressure has run low for the whole month (about 87/55), with occasional "
+        "notes about dizziness on standing. Takes his medication every day.",
+        expect="Low: told to contact the clinic if dizzy or unwell. No habit advice (his habits are healthy).",
+        review="Flagged (routine) as SUSTAINED LOW: below 90/60 for 4 of 4 weeks, a prompt to review "
+        "possible causes and ask about dizziness or falls.",
+    )  # fmt: skip
+    dizzy = ["Dizzy when I stood up", "Felt light-headed after breakfast"]
+    for d in _days():
+        note = rng.choice(dizzy) if d % 6 == 0 else None
+        p.readings.append(_morning(rng, d, 87, 55, 3, 3, notes=note, **PROPER))
+        p.readings.append(_evening(rng, d, 89, 56, 3, 3, **PROPER))
+        p.factors.append(FactorRow(d, **HEALTHY))
+    return p
+
+
 def build_demo_data(today: date | None = None) -> list[Persona]:
     """The six patients, with every row expressed as 'days ago' (no database needed)."""
     today = today or datetime.now(EAT).date()
-    return [grace(today), peter(today), mary(today), james(today), amina(today), daniel(today)]
+    return [grace(today), peter(today), mary(today), james(today), amina(today), daniel(today), joseph(today)]
 
 
 # --------------------------------------------------------------------------
@@ -369,6 +396,7 @@ def seed(db, personas: list[Persona], now: datetime | None = None) -> dict[str, 
                 user_id=user.user_id,
                 date_of_birth=date(p.birth_year, 6, 15),
                 sex=SexEnum(p.sex),
+                timezone="Africa/Nairobi",
             )
         )
         for r in p.readings:
@@ -392,6 +420,7 @@ def seed(db, personas: list[Persona], now: datetime | None = None) -> dict[str, 
                     stress_level=StressLevel(f.stress_level) if f.stress_level else None,
                     sleep_hours=f.sleep_hours,
                     diet_adherence=f.diet_adherence,
+                    medication_prescribed=True if f.medication_taken is not None else None,
                     medication_taken=f.medication_taken,
                     salt_intake=IntakeLevel(f.salt_intake) if f.salt_intake else None,
                     caffeine_intake=IntakeLevel(f.caffeine_intake) if f.caffeine_intake else None,
@@ -451,11 +480,13 @@ def write_csvs(personas: list[Persona], directory: Path, now: datetime | None = 
     guide_path = directory / "demo_accounts_and_expected_results.csv"
     with guide_path.open("w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh)
-        w.writerow(["email", "password", "patient", "what_the_data_is_like", "what_the_system_should_show"])
+        w.writerow(["email", "password", "patient", "what_the_data_is_like", "what_the_patient_should_be_told",
+                    "what_the_clinician_treatment_review_flag_should_show"])  # fmt: skip
         for p in personas:
-            w.writerow([p.email, DEMO_PASSWORD, p.full_name, p.story, p.expect])
-        w.writerow([CLINICIAN_EMAIL, DEMO_PASSWORD, "Dr. Wambui Njoroge", "Clinician account for reviewing the six patients.",
-                    "Sees every patient, every logged habit, the alerts queue and flagged readings."])  # fmt: skip
+            w.writerow([p.email, DEMO_PASSWORD, p.full_name, p.story, p.expect, p.review])
+        w.writerow([CLINICIAN_EMAIL, DEMO_PASSWORD, "Dr. Wambui Njoroge", "Clinician account for reviewing the seven patients.",
+                    "(not a patient)", "Sees a treatment-review badge on six of the seven patients, the alerts queue, "
+                    "every logged habit and flagged readings."])  # fmt: skip
     return [readings_path, lifestyle_path, guide_path]
 
 
@@ -481,7 +512,8 @@ def main():
     for p in personas:
         n_readings, n_logs = len(p.readings), len(p.factors)
         print(
-            f"{p.full_name:16} {p.email}\n    {p.story}\n    Expect: {p.expect}\n    ({n_readings} readings, {n_logs} lifestyle logs)\n"
+            f"{p.full_name:16} {p.email}\n    {p.story}\n    Patient sees: {p.expect}\n"
+            f"    Clinician sees: {p.review}\n    ({n_readings} readings, {n_logs} lifestyle logs)\n"
         )
     print(f"Clinician        {CLINICIAN_EMAIL}")
 

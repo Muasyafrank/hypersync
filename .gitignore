@@ -19,8 +19,8 @@ env/
 hyper/
 backend/hyper/
 
-# ML artefacts and raw data (regenerate with `python -m ml.train_model`)
-backend/ml/models/*.joblib
+# Raw survey data is not versioned; the small, reproducible model artefact is.
+# Regenerate the model with `python -m ml.train_model` from backend/.
 backend/data/*.sav
 
 # Logs

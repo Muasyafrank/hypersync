@@ -1,5 +1,6 @@
 {
   "data_source": "Kenya STEPS NCD Risk Factor Survey 2015 (KNBS/MoH/WHO)",
+  "model_version": "3.0.1-steps-logit-aligned",
   "feature_set": "current",
   "features": [
     "age",
@@ -10,6 +11,14 @@
     "activity_minutes",
     "diet_adherence"
   ],
+  "classification_thresholds": {
+    "low_systolic": 90,
+    "low_diastolic": 60,
+    "high_systolic": 150,
+    "high_diastolic": 90,
+    "elevated_systolic": 135,
+    "elevated_diastolic": 85
+  },
   "n_total": 4282,
   "at_risk_share": 0.41686127977580567,
   "cv_comparison": {

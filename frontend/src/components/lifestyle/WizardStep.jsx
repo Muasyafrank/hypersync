@@ -79,7 +79,7 @@ function NumberStep({ step, value, onChange }) {
 
 /** Everything about to be saved, so nothing is a surprise; skipped questions are shown as such. */
 function ReviewStep({ answers }) {
-  const reviewed = STEPS.filter((step) => step.type !== 'review');
+  const reviewed = STEPS.filter((step) => step.type !== 'review' && (!step.visibleWhen || step.visibleWhen(answers)));
   return (
     <div>
       <dl className="hs-review-list">

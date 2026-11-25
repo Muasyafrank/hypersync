@@ -40,6 +40,19 @@ class TestAuth:
         )
         assert response.status_code == 422
 
+    def test_a_future_date_of_birth_is_rejected(self, client):
+        future = (datetime.now(UTC) + timedelta(days=1)).date().isoformat()
+        response = client.post(
+            "/auth/register",
+            json={
+                "full_name": "Future Person",
+                "email": "future@example.com",
+                "password": "long-enough-pw",
+                "date_of_birth": future,
+            },
+        )
+        assert response.status_code == 422
+
     def test_malformed_refresh_token_is_a_401_not_a_500(self, client):
         response = client.post("/auth/refresh", json={"refresh_token": "not-a-jwt"})
         assert response.status_code == 401
@@ -110,6 +123,69 @@ class TestEnvironmentAndMeasurementConditions:
     @pytest.mark.parametrize("payload", [{"temperature_feel": "freezing"}, {"noise_level": "deafening"}])
     def test_unknown_levels_are_rejected(self, client, patient_headers, payload):
         assert client.post("/factors", json=payload, headers=patient_headers).status_code == 422
+
+    def test_an_empty_check_in_is_rejected(self, client, patient_headers):
+        response = client.post(
+            "/factors",
+            json={"logged_date": datetime.now(UTC).date().isoformat()},
+            headers=patient_headers,
+        )
+        assert response.status_code == 422
+        assert "at least one" in response.text.lower()
+
+    def test_no_medication_is_distinct_from_medication_not_taken(self, client, patient_headers):
+        no_medication = client.post(
+            "/factors",
+            json={"sleep_hours": 7, "medication_prescribed": False},
+            headers=patient_headers,
+        )
+        assert no_medication.status_code == 201, no_medication.text
+        assert no_medication.json()["medication_prescribed"] is False
+        assert no_medication.json()["medication_taken"] is None
+
+        invalid = client.post(
+            "/factors",
+            json={"medication_prescribed": False, "medication_taken": False},
+            headers=patient_headers,
+        )
+        assert invalid.status_code == 422
+
+        yesterday = (datetime.now(UTC).date() - timedelta(days=1)).isoformat()
+        not_taken = client.post(
+            "/factors",
+            json={"medication_prescribed": True, "medication_taken": False, "logged_date": yesterday},
+            headers=patient_headers,
+        )
+        assert not_taken.status_code == 201, not_taken.text
+        assert not_taken.json()["medication_prescribed"] is True
+        assert not_taken.json()["medication_taken"] is False
+
+    def test_a_future_check_in_is_rejected(self, client, patient_headers):
+        tomorrow = datetime.now(UTC).date() + timedelta(days=1)
+        response = client.post(
+            "/factors", json={"sleep_hours": 7, "logged_date": tomorrow.isoformat()}, headers=patient_headers
+        )
+        assert response.status_code == 422
+        assert "future" in response.text.lower()
+
+    def test_only_one_check_in_is_allowed_per_patient_per_day(self, client, patient_headers):
+        day = datetime.now(UTC).date().isoformat()
+        assert (
+            client.post("/factors", json={"sleep_hours": 7, "logged_date": day}, headers=patient_headers).status_code
+            == 201
+        )
+        duplicate = client.post("/factors", json={"smoked": False, "logged_date": day}, headers=patient_headers)
+        assert duplicate.status_code == 409
+        assert "already exists" in duplicate.text.lower()
+
+    def test_another_patient_can_log_the_same_day(self, client, patient_headers, register_and_login):
+        other = register_and_login("other-factor@example.com")
+        day = datetime.now(UTC).date().isoformat()
+        assert (
+            client.post("/factors", json={"sleep_hours": 7, "logged_date": day}, headers=patient_headers).status_code
+            == 201
+        )
+        assert client.post("/factors", json={"sleep_hours": 8, "logged_date": day}, headers=other).status_code == 201
 
 
 class TestReadingSummary:

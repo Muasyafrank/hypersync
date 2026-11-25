@@ -186,6 +186,7 @@ def seed_factors(db, ws, email_to_id):
                 stress_level=StressLevel(stress) if stress else None,
                 sleep_hours=sleep,
                 diet_adherence=diet,
+                medication_prescribed=True if meds is not None else None,
                 medication_taken=meds,
                 salt_intake=IntakeLevel(salt) if salt else None,
                 caffeine_intake=IntakeLevel(caffeine) if caffeine else None,

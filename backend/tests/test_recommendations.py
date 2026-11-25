@@ -1,6 +1,11 @@
 """What a patient is actually told, end to end: log habits and readings, read the advice back."""
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
+
+import joblib
+import pytest
+
+from app.core.ml_recommendation_engine import _MODEL_PATH
 
 RISKY = dict(
     stress_level="high", sleep_hours=4.5, diet_adherence=False, medication_taken=False, salt_intake="high",
@@ -25,7 +30,7 @@ def log_reading(client, headers, days_ago, systolic, diastolic, **conditions):
 
 
 def log_factors(client, headers, days_ago, **answers):
-    logged = (date.today() - timedelta(days=days_ago)).isoformat()
+    logged = (datetime.now(UTC).date() - timedelta(days=days_ago)).isoformat()
     assert client.post("/factors", json={**answers, "logged_date": logged}, headers=headers).status_code == 201
 
 
@@ -37,6 +42,15 @@ def texts(recs):
     return " ".join(r["message"] for r in recs).lower()
 
 
+def test_the_population_estimate_has_distinct_provenance(client, patient_headers):
+    for d in range(3):
+        log_reading(client, patient_headers, d, 170, 100)
+
+    recs = client.get("/recommendations/me", headers=patient_headers).json()
+    assert recs[0]["source"] == "population_model"
+    assert "population figure, not a diagnosis" in recs[0]["message"]
+
+
 def test_elevated_bp_with_every_habit_logged_never_hides_smoking_or_medication(client, patient_headers):
     for d in range(5):
         log_reading(client, patient_headers, d, 165, 100)
@@ -46,6 +60,9 @@ def test_elevated_bp_with_every_habit_logged_never_hides_smoking_or_medication(c
     assert "smoking" in said
     assert "medication" in said
     assert "also worth attention" in said  # whatever didn't fit is named
+    # Naming a cut habit is not enough: its concrete action must still be shown.
+    assert "aim for 7 to 9 hours" in said
+    assert "five minutes of slow breathing" in said
 
 
 def test_caffeine_is_advised_on(client, patient_headers):
@@ -110,7 +127,9 @@ def test_healthy_habits_with_high_bp_say_so_instead_of_blaming_lifestyle(client,
         log_reading(client, patient_headers, d, 165, 100)
     log_factors(client, patient_headers, 0, sleep_hours=8, stress_level="low", smoked=False, medication_taken=True)
 
-    assert "look healthy" in texts(client.get("/recommendations/me", headers=patient_headers).json())
+    said = texts(client.get("/recommendations/me", headers=patient_headers).json())
+    assert "no risky pattern is visible" in said
+    assert "other factors may still matter" in said
 
 
 def test_no_lifestyle_log_asks_the_patient_to_start_one(client, patient_headers):
@@ -156,6 +175,15 @@ def test_hurried_readings_without_a_comparison_still_get_technique_advice(client
     assert "4 of your 4 readings" in said
 
 
+def test_controlled_readings_still_flag_hurried_measurement(client, patient_headers):
+    for d in range(3):
+        log_reading(client, patient_headers, d, 118, 76, rested_before=False, stimulant_before=True)
+
+    said = texts(client.get("/recommendations/me", headers=patient_headers).json())
+    assert "without resting first" in said
+    assert "sit quietly with your back supported" in said
+
+
 def test_no_technique_advice_when_readings_were_taken_properly(client, patient_headers):
     for d in range(4):
         log_reading(client, patient_headers, d, 165, 100, rested_before=True, stimulant_before=False)
@@ -176,3 +204,207 @@ def test_nobody_is_told_to_log_more_once_there_is_enough(client, patient_headers
         log_reading(client, patient_headers, d, 168 if d % 2 == 0 else 118, 100 if d % 2 == 0 else 76)
         log_factors(client, patient_headers, d, sleep_hours=4 if d % 2 == 0 else 8)
     assert "so far" not in texts(client.get("/recommendations/me", headers=patient_headers).json())
+
+
+def test_low_bp_patients_still_receive_actionable_habit_advice(client, patient_headers):
+    for d in range(3):
+        log_reading(client, patient_headers, d, 85, 55)
+    log_factors(
+        client,
+        patient_headers,
+        0,
+        smoked=True,
+        medication_taken=False,
+        sleep_hours=4,
+    )
+
+    said = texts(client.get("/recommendations/me", headers=patient_headers).json())
+    assert "ask your clinic about help to quit" in said
+    assert "set a phone reminder" in said
+    assert "aim for 7 to 9 hours" in said
+
+
+def test_missing_profile_inputs_are_not_described_as_the_patients_own(client, patient_headers):
+    for d in range(3):
+        log_reading(client, patient_headers, d, 170, 100)
+
+    said = texts(client.get("/recommendations/me", headers=patient_headers).json())
+    assert "missing your age, sex," in said
+    assert "smoking status" in said
+    assert "alcohol use" in said
+    assert "salt intake" in said
+    assert "physical activity" in said
+    assert "diet" in said
+    assert "default values" in said
+    assert "not fully personalised" in said
+
+
+def test_complete_model_inputs_do_not_claim_to_use_defaults(client):
+    registration = client.post(
+        "/auth/register",
+        json={
+            "full_name": "Complete Profile",
+            "email": "complete.profile@example.com",
+            "password": "correct-horse-battery",
+            "date_of_birth": "1990-01-01",
+            "sex": "Female",
+        },
+    )
+    assert registration.status_code == 201, registration.text
+    login = client.post(
+        "/auth/login",
+        data={"username": "complete.profile@example.com", "password": "correct-horse-battery"},
+    )
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+    for d in range(3):
+        log_reading(client, headers, d, 170, 100)
+    log_factors(
+        client,
+        headers,
+        0,
+        smoked=False,
+        alcohol_consumed=False,
+        salt_intake="low",
+        physical_activity_minutes=30,
+        diet_adherence=True,
+    )
+
+    said = texts(client.get("/recommendations/me", headers=headers).json())
+    assert "not fully personalised" not in said
+    assert "default values" not in said
+
+
+def test_an_age_outside_the_model_range_omits_the_population_estimate(client):
+    registration = client.post(
+        "/auth/register",
+        json={
+            "full_name": "Underage Patient",
+            "email": "underage@example.com",
+            "password": "correct-horse-battery",
+            "date_of_birth": "2015-01-01",
+            "sex": "Female",
+        },
+    )
+    assert registration.status_code == 201, registration.text
+    login = client.post(
+        "/auth/login",
+        data={"username": "underage@example.com", "password": "correct-horse-battery"},
+    )
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    for d in range(3):
+        log_reading(client, headers, d, 170, 100)
+
+    response = client.get("/recommendations/me", headers=headers)
+    assert response.status_code == 200
+    assert "outside the model's supported 18–100 range" in texts(response.json())
+    assert response.json()[0]["source"] == "system"
+
+
+def test_activity_above_the_model_cap_is_disclosed(client):
+    registration = client.post(
+        "/auth/register",
+        json={
+            "full_name": "Very Active Patient",
+            "email": "very.active@example.com",
+            "password": "correct-horse-battery",
+            "date_of_birth": "1990-01-01",
+            "sex": "Female",
+        },
+    )
+    assert registration.status_code == 201, registration.text
+    login = client.post(
+        "/auth/login",
+        data={"username": "very.active@example.com", "password": "correct-horse-battery"},
+    )
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    for d in range(3):
+        log_reading(client, headers, d, 170, 100)
+    log_factors(
+        client,
+        headers,
+        0,
+        smoked=False,
+        alcohol_consumed=False,
+        salt_intake="low",
+        physical_activity_minutes=600,
+        diet_adherence=True,
+    )
+
+    response = client.get("/recommendations/me", headers=headers)
+    assert response.status_code == 200
+    assert response.json()[0]["source"] == "population_model"
+    assert "physical activity value is capped at 240 minutes per day" in texts(response.json())
+
+
+def test_a_missing_model_degrades_the_population_estimate_without_failing(client, patient_headers, monkeypatch):
+    monkeypatch.setattr("app.core.ml_recommendation_engine._MODEL_PATH", "/tmp/does-not-exist.joblib")
+    monkeypatch.setattr("app.core.ml_recommendation_engine._bundle", None)
+    monkeypatch.setattr("app.core.ml_recommendation_engine._model_load_attempted", False)
+    for d in range(3):
+        log_reading(client, patient_headers, d, 170, 100)
+
+    response = client.get("/recommendations/me", headers=patient_headers)
+    assert response.status_code == 200
+    said = texts(response.json())
+    assert "not available right now" in said
+    assert "uses your readings and daily log" in said
+
+
+def test_a_corrupt_model_degrades_the_population_estimate_without_failing(
+    client, patient_headers, monkeypatch, tmp_path
+):
+    artifact = tmp_path / "corrupt.joblib"
+    artifact.write_bytes(b"this is not a joblib artefact")
+    monkeypatch.setattr("app.core.ml_recommendation_engine._MODEL_PATH", str(artifact))
+    monkeypatch.setattr("app.core.ml_recommendation_engine._bundle", None)
+    monkeypatch.setattr("app.core.ml_recommendation_engine._model_load_attempted", False)
+    for d in range(3):
+        log_reading(client, patient_headers, d, 170, 100)
+
+    response = client.get("/recommendations/me", headers=patient_headers)
+    assert response.status_code == 200
+    assert "not available right now" in texts(response.json())
+
+
+def test_an_incompatible_model_degrades_the_population_estimate_without_failing(
+    client, patient_headers, monkeypatch, tmp_path
+):
+    artifact = tmp_path / "incompatible.joblib"
+    joblib.dump({"unexpected": "bundle"}, artifact)
+    monkeypatch.setattr("app.core.ml_recommendation_engine._MODEL_PATH", str(artifact))
+    monkeypatch.setattr("app.core.ml_recommendation_engine._bundle", None)
+    monkeypatch.setattr("app.core.ml_recommendation_engine._model_load_attempted", False)
+    for d in range(3):
+        log_reading(client, patient_headers, d, 170, 100)
+
+    response = client.get("/recommendations/me", headers=patient_headers)
+    assert response.status_code == 200
+    assert "not available right now" in texts(response.json())
+
+
+@pytest.mark.parametrize("malformation", ["median", "effects", "version"])
+def test_a_malformed_published_model_fails_closed_without_a_500(
+    client, patient_headers, monkeypatch, tmp_path, malformation
+):
+    bundle = joblib.load(_MODEL_PATH)
+    if malformation == "median":
+        bundle["feature_medians"]["smoked"] = None
+    elif malformation == "effects":
+        bundle["effects"]["smoked"].pop("ci_high")
+    else:
+        bundle["version"] = "foreign-model"
+
+    artifact = tmp_path / f"malformed-{malformation}.joblib"
+    joblib.dump(bundle, artifact)
+    monkeypatch.setattr("app.core.ml_recommendation_engine._MODEL_PATH", str(artifact))
+    monkeypatch.setattr("app.core.ml_recommendation_engine._bundle", None)
+    monkeypatch.setattr("app.core.ml_recommendation_engine._model_load_attempted", False)
+    # Isolate bundle validation from the published-file digest check.
+    monkeypatch.setattr("app.core.ml_recommendation_engine._validate_model_file", lambda _path: None)
+    for d in range(3):
+        log_reading(client, patient_headers, d, 170, 100)
+
+    response = client.get("/recommendations/me", headers=patient_headers)
+    assert response.status_code == 200
+    assert "not available right now" in texts(response.json())

@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { Button, Col, Modal, Row } from 'react-bootstrap';
 import { Loader, RoleBadge } from '../ui';
 import { formatFullDate } from '../../utils/format';
@@ -12,10 +13,12 @@ function DetailRow({ label, children }) {
 }
 
 export default function UserDetailModal({ user, loading, onHide }) {
+  const titleId = useId();
+
   return (
-    <Modal show={Boolean(user)} onHide={onHide} centered>
+    <Modal show={Boolean(user)} onHide={onHide} centered aria-labelledby={titleId}>
       <Modal.Body className="p-4">
-        <h5 className="hs-title mb-3">User details</h5>
+        <h2 id={titleId} className="hs-title hs-modal-title mb-3">User details</h2>
 
         {loading ? (
           <Loader className="py-3" />

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
-  Activity, AlertTriangle, Bell, Heart, LayoutGrid, LineChart, LogOut, Menu, UserCog, Users, X,
+  Activity, AlertTriangle, Bell, Heart, LayoutGrid, Lightbulb, LineChart, LogOut, Menu, UserCog, Users, X,
 } from 'lucide-react';
 import logoMark from '../assets/logo-mark.svg';
 import { useAuth } from '../context/AuthContext';
@@ -14,6 +14,7 @@ const NAV_ITEMS = {
     { to: '/dashboard', label: 'Dashboard', icon: LayoutGrid },
     { to: '/readings', label: 'Readings', icon: Heart },
     { to: '/trend', label: 'Trends', icon: LineChart },
+    { to: '/recommendations', label: 'Recommendations', icon: Lightbulb },
     { to: '/lifestyle', label: 'Lifestyle', icon: Activity },
     { to: '/alerts', label: 'Alerts', icon: Bell },
   ],

@@ -19,7 +19,7 @@ export default class ErrorBoundary extends Component {
     return (
       <Container className="py-5 text-center hs-error-boundary">
         <AlertTriangle size={32} color="#DC2626" className="mb-3" />
-        <h4 className="hs-title mb-2">Something went wrong</h4>
+        <h1 className="hs-title hs-error-title mb-2">Something went wrong</h1>
         <p className="hs-subtitle mb-4">
           The page failed to load. Reloading usually fixes it.
         </p>

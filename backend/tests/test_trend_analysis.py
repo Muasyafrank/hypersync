@@ -31,6 +31,39 @@ def test_averages_and_overall_status():
     assert trend.status == "high"
 
 
+@pytest.mark.parametrize(
+    ("first", "second", "expected"),
+    [
+        ((89, 80), (90, 80), "low"),  # 89.5 systolic is below 90
+        ((120, 59), (120, 60), "low"),  # 59.5 diastolic is below 60
+        ((149, 80), (150, 80), "elevated"),  # 149.5 systolic is below 150
+        ((120, 89), (120, 90), "elevated"),  # 89.5 diastolic is below 90
+        ((90, 60), (90, 60), "controlled"),
+        ((150, 90), (150, 90), "high"),
+        ((135, 85), (135, 85), "elevated"),
+    ],
+)
+def test_fractional_averages_are_classified_without_rounding(first, second, expected):
+    readings = [
+        reading(1, first[0], first[1], hour=8),
+        reading(1, second[0], second[1], hour=20),
+    ]
+
+    trend = summarize_readings(readings, period_days=7)
+
+    assert trend.status == expected
+    assert trend.daily_breakdown[0].status == expected
+
+
+def test_status_agrees_with_the_one_decimal_average_shown_to_the_user():
+    readings = [reading(1, 150, 80, hour=8)] * 24 + [reading(1, 149, 80, hour=20)]
+    trend = summarize_readings(readings, period_days=7)
+    assert trend.avg_systolic == 150.0
+    assert trend.status == "high"
+    assert trend.daily_breakdown[0].avg_systolic == 150.0
+    assert trend.daily_breakdown[0].status == "high"
+
+
 def test_same_day_readings_collapse_into_one_daily_average():
     trend = summarize_readings([reading(1, 120, 80, hour=8), reading(1, 130, 90, hour=20), reading(2, 118, 78)], 7)
     assert [d.reading_count for d in trend.daily_breakdown] == [2, 1]
