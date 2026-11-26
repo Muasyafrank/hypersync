@@ -272,8 +272,8 @@ def amina(today: date) -> Persona:
     p = Persona(
         "demo.amina@example.com", "Amina Hassan", "Female", 1958,
         story="Consistently high (about 166/102) and measures twice a day, but has logged her "
-        "lifestyle only twice in 30 days (one entry says her medication was not taken).",
-        expect="High, with a high-trend alert. Missed-medication advice, plus a message saying "
+        "lifestyle only twice in 30 days. Treatment information remains visible to clinicians only.",
+        expect="High, with a high-trend alert. No medication or treatment advice, plus a message saying "
         "exactly how many more days of logging are needed ('You have 2 so far').",
         review='Flagged (PRIORITY): high for 4 of 4 weeks, and adherence is not logged often enough to tell, so the clinician is asked to confirm adherence first.',
     )  # fmt: skip
@@ -292,8 +292,8 @@ def daniel(today: date) -> Persona:
         "demo.daniel@example.com", "Daniel Mutua", "Male", 1969,
         story="High pressure (about 160/98) every day and nearly every habit is risky: smoking, "
         "alcohol at weekends, high salt, little sleep or activity, and medication not taken.",
-        expect="High. Smoking and medication-not-taken always appear; a closing line names whatever "
-        "didn't fit. No own-data findings, because there are no good days to compare with.",
+        expect="High. Smoking always appears; a closing line names whatever didn't fit. No medication or "
+        "treatment advice. No own-data findings, because there are no good days to compare with.",
         review='Flagged (PRIORITY): high for 4 of 4 weeks, with medication logged as not taken on about 40% of logged days, so the clinician is prompted to confirm adherence and other causes.',
     )  # fmt: skip
     for d in _days():

@@ -1,6 +1,7 @@
 """End-to-end checks of the HTTP API (auth, readings, role guards, alerts)."""
 
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -41,7 +42,8 @@ class TestAuth:
         assert response.status_code == 422
 
     def test_a_future_date_of_birth_is_rejected(self, client):
-        future = (datetime.now(UTC) + timedelta(days=1)).date().isoformat()
+        patient_timezone = ZoneInfo("Africa/Nairobi")
+        future = (datetime.now(patient_timezone) + timedelta(days=1)).date().isoformat()
         response = client.post(
             "/auth/register",
             json={
@@ -49,6 +51,7 @@ class TestAuth:
                 "email": "future@example.com",
                 "password": "long-enough-pw",
                 "date_of_birth": future,
+                "timezone": str(patient_timezone),
             },
         )
         assert response.status_code == 422
@@ -90,6 +93,30 @@ class TestReadings:
         alerts = client.get("/alerts/me", headers=patient_headers).json()
         assert len(alerts) == 1
         assert alerts[0]["alert_type"] == "high_trend"
+
+    def test_a_very_high_reading_creates_an_acute_clinician_alert(self, client, patient_headers):
+        for days_ago in range(1, 7):
+            when = (datetime.now(UTC) - timedelta(days=days_ago)).replace(microsecond=0)
+            response = client.post(
+                "/readings",
+                json=_reading(systolic=120, diastolic=80, recorded_at=when.isoformat()),
+                headers=patient_headers,
+            )
+            assert response.status_code == 201, response.text
+
+        acute = client.post(
+            "/readings",
+            json=_reading(systolic=185, diastolic=115),
+            headers=patient_headers,
+        )
+        assert acute.status_code == 201, acute.text
+        assert acute.json()["status"] == "high"
+
+        alerts = client.get("/alerts/me", headers=patient_headers).json()
+        acute_alerts = [alert for alert in alerts if alert["alert_type"] == "very_high_reading"]
+        assert len(acute_alerts) == 1
+        assert "185/115" in acute_alerts[0]["message"]
+        assert all(alert["alert_type"] != "high_trend" for alert in alerts)
 
     def test_a_patient_cannot_delete_someone_elses_reading(self, client, register_and_login):
         owner = register_and_login("owner@example.com")

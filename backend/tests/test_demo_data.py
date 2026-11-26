@@ -126,30 +126,48 @@ class TestWhatEachPatientSees:
         said = text([r for r in advice_for(client, h) if r["source"] == "pattern"])
         assert "had a loud day" in said and "logged cold weather" in said
 
-    def test_amina_gets_an_alert_medication_advice_and_a_logging_target(self, client, demo):
+    def test_before_and_after_demo_profiles_get_different_uncertain_explanations(self, client, demo):
+        people, headers_for = demo
+        peter = advice_for(client, headers_for(people["peter"].email))[0]
+        daniel = advice_for(client, headers_for(people["daniel"].email))[0]
+
+        assert peter["source"] == daniel["source"] == "population_model"
+        assert "Model explanation:" in peter["message"]
+        assert "Model explanation:" in daniel["message"]
+        assert "95% range" in peter["message"]
+        assert peter["message"] != daniel["message"]
+        assert peter["confidence"] != daniel["confidence"]
+
+    def test_amina_gets_an_alert_and_a_logging_target_without_medication_advice(self, client, demo):
         people, headers_for = demo
         h = headers_for(people["amina"].email)
         assert status_for(client, h) == "high"
         assert [a["alert_type"] for a in client.get("/alerts/me", headers=h).json()] == ["high_trend"]
         said = text(advice_for(client, h))
-        assert "medication was not taken as advised" in said
         assert "you have 2 so far" in said
+        for prohibited in ("medication", "medicine", "drug", "dose", "prescription"):
+            assert prohibited not in said
 
-    def test_daniel_never_loses_smoking_or_medication_to_the_cap(self, client, demo):
+    def test_daniel_never_loses_smoking_to_the_cap_and_never_sees_medication_advice(self, client, demo):
         people, headers_for = demo
         h = headers_for(people["daniel"].email)
         recs = advice_for(client, h)
         said = text(recs)
         assert status_for(client, h) == "high"
-        assert "smoking" in said and "medication was not taken as advised" in said
+        assert "smoking" in said
         assert "also worth attention" in said
+        for prohibited in ("medication", "medicine", "drug", "dose", "prescription"):
+            assert prohibited not in said
         assert not [r for r in recs if r["source"] == "pattern"]  # no good days to compare with
 
-    def test_joseph_low_pressure_gets_the_low_advice(self, client, demo):
+    def test_joseph_low_pressure_gets_safety_wording_only(self, client, demo):
         people, headers_for = demo
         h = headers_for(people["joseph"].email)
         assert status_for(client, h) == "low"
-        assert "low side" in text(advice_for(client, h))
+        said = text(advice_for(client, h))
+        assert "was low" in said
+        assert "lifestyle advice is not shown for low readings" in said
+        assert len(advice_for(client, h)) == 1
 
     def test_the_clinician_sees_all_seven_patients(self, client, demo):
         _, headers_for = demo

@@ -58,7 +58,6 @@ def test_every_habit_is_fully_wired_up():
         ("sleep_hours", 4.5, 8),
         ("stress_level", "high", "moderate"),
         ("caffeine_intake", "high", "moderate"),
-        ("medication_taken", False, True),
         ("temperature_feel", "cold", "comfortable"),
         ("noise_level", "loud", "moderate"),
     ],
@@ -136,20 +135,20 @@ class TestBuildAdvice:
         for field in ("caffeine_intake", "sleep_hours", "stress_level"):
             assert TIPS[field] in text
 
-    def test_smoking_and_missed_medication_are_never_the_ones_cut(self):
+    def test_smoking_is_never_the_one_cut_and_medication_is_never_patient_output(self):
         everything = dict(
             salt_intake="high", alcohol_consumed=True, smoked=True, physical_activity_minutes=0,
-            diet_adherence=False, sleep_hours=3, stress_level="high", caffeine_intake="high", medication_taken=False,
+            diet_adherence=False, sleep_hours=3, stress_level="high", caffeine_intake="high",
         )  # fmt: skip
         advice = build_advice([entry(0, **everything)], {}, day(0), None, limit=3)
         text = " ".join(a["message"] for a in advice)
         assert "smoking" in text.lower()
-        assert "medication" in text.lower()
+        assert "medication" not in text.lower()
 
     def test_anything_cut_for_space_is_named_not_dropped(self):
         everything = dict(
             salt_intake="high", alcohol_consumed=True, smoked=True, physical_activity_minutes=0,
-            diet_adherence=False, sleep_hours=3, stress_level="high", caffeine_intake="high", medication_taken=False,
+            diet_adherence=False, sleep_hours=3, stress_level="high", caffeine_intake="high",
         )  # fmt: skip
         advice = build_advice([entry(0, **everything)], {}, day(0), None, limit=3)
         text = " ".join(a["message"] for a in advice)
@@ -192,7 +191,7 @@ class TestBuildAdvice:
         effects = {"alcohol_consumed": {"odds_ratio": 1.5, "ci_low": 1.1, "ci_high": 2.0}}
         advice = build_advice([entry(0, alcohol_consumed=True)], {}, day(0), effects, limit=5)
         assert advice[0]["source"] == "model"
-        assert "survey data" in advice[0]["message"]
+        assert "survey model also found an association" in advice[0]["message"]
 
 
 def reading(systolic, rested=None, stimulant=None):

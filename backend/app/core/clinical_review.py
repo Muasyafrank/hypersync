@@ -16,8 +16,11 @@ from app.core.bp_classification import (
     HIGH_SYSTOLIC,
     LOW_DIASTOLIC,
     LOW_SYSTOLIC,
+    VERY_HIGH_DIASTOLIC,
+    VERY_HIGH_SYSTOLIC,
 )
 from app.core.lifestyle_factors import GUIDELINE_MESSAGES
+from app.core.safety_messages import LOW_SAFETY_GUIDANCE, VERY_HIGH_SAFETY_GUIDANCE
 from ml.model_contract import (
     MODEL_ACTIVITY_MAX_MINUTES,
     MODEL_AGE_RANGE,
@@ -45,11 +48,10 @@ LABELS_LONG = {
     "alcohol_consumed": "Alcohol",
     "smoked": "Smoking",
     "physical_activity_minutes": "Physical activity",
-    "diet_adherence": "Diet followed",
+    "diet_adherence": "Fruit and vegetables",
     "sleep_hours": "Sleep",
     "stress_level": "Stress",
     "caffeine_intake": "Coffee or tea",
-    "medication_taken": "Medication",
     "temperature_feel": "Temperature",
     "noise_level": "Noise",
 }
@@ -69,9 +71,9 @@ def render_review_sheet(review_status: str | None = None) -> str:
         "or a cut-off, edit the code (file names are given below) and regenerate. Human review entries between the "
         "marked review-status section are preserved during regeneration._",
         "",
-        "Everything here is general lifestyle guidance shown to patients. None of it is a diagnosis or a prescription.",
+        "Patient-facing wording in sections 1–5 is shown to patients. None of it is a diagnosis or a prescription.",
         "",
-        "**Review status: unsigned in the committed repository. The marked review record in section 7 is blank, so this wording must not be represented as clinically approved.**",
+        "**Review status: unsigned in the committed repository. The wording is not clinically approved. The marked review record in section 7 is blank, so it must not be represented as approved guidance.**",
         "",
         "## 1. Blood pressure bands (mmHg)",
         "",
@@ -83,7 +85,15 @@ def render_review_sheet(review_status: str | None = None) -> str:
         f"| High | systolic {HIGH_SYSTOLIC} or above **or** diastolic {HIGH_DIASTOLIC} or above |",
         f"| Elevated | systolic {ELEVATED_SYSTOLIC} or above **or** diastolic {ELEVATED_DIASTOLIC} or above |",
         "| Controlled | otherwise |",
-        "| Urgent | **Not implemented.** A reading of 180/110 remains in the High band; no emergency protocol is inferred. |",
+        f"| Very-high safety route (internal) | systolic {VERY_HIGH_SYSTOLIC} or above **or** diastolic {VERY_HIGH_DIASTOLIC} or above |",
+        "",
+        "A reading in the very-high safety route remains publicly classified as **High** so the stored band does "
+        "not change. Recommendation routing gives it safety wording only: urgent-care wording, no model estimate, "
+        "and no lifestyle advice. Any low or very-high reading in the current recommendation window takes priority "
+        "over the window average.",
+        "",
+        f"- **Very-high wording:** “{VERY_HIGH_SAFETY_GUIDANCE}”",
+        f"- **Low wording:** “{LOW_SAFETY_GUIDANCE}”",
         "",
         "## 2. Habits patients log, and what is said about them",
         "",
@@ -107,7 +117,8 @@ def render_review_sheet(review_status: str | None = None) -> str:
         "- The patient may save **one lifestyle/environmental check-in per local calendar day**.",
         "- Empty check-ins and dates in the future are rejected.",
         "- Medication use is calculated from distinct logged days, not the number of stored rows. Patients who "
-        "record that they take no prescribed medication are excluded from adherence counts.",
+        "record that they take no prescribed medication are excluded from adherence counts. This treatment-review "
+        "logic is shown to clinicians only; patient recommendations never mention medication or treatment changes.",
         "",
         "## 3. How each reading was taken",
         "",
@@ -127,20 +138,26 @@ def render_review_sheet(review_status: str | None = None) -> str:
         f"reading, and an average systolic gap of **{fi.PATTERN_MIN_DIFF_MMHG} mmHg or more**.",
         "- Wording always says it is a link in the patient's own readings, not proof of cause.",
         "- Habits that occurred on exactly the same days are reported together.",
-        f"- At most {fi.MAX_PATTERNS} pattern findings are shown. Smoking and medication-not-taken are never the habits "
-        "left out for space; anything cut is named.",
+        f"- At most {fi.MAX_PATTERNS} pattern findings are shown. Smoking is never the habit left out for space; "
+        "anything cut is named. Medication is not a patient-facing habit and never appears in patient recommendation output.",
         "",
         "## 5. Survey-model population estimate",
         "",
         "Source: `backend/app/core/ml_recommendation_engine.py`, `backend/ml/README.md`.",
         "",
-        "- The Kenya STEPS 2015 model estimates a **population probability** from age, sex and five lifestyle features. It is context, not a diagnosis or an individual clinical prediction.",
-        "- When profile or lifestyle inputs are missing, the model uses training-population defaults and the patient-facing text says that the estimate is not fully personalised.",
+        "- The Kenya STEPS 2015 model estimates a **population probability** from age, sex and five lifestyle features. It is context, not a diagnosis, an individual clinical prediction or a future-risk forecast.",
+        "- The build uses the survey measurement weight, locked PSU-grouped train/validation/test splits, regularised logistic regression, and Platt calibration learned only on validation data.",
+        "- When profile or lifestyle inputs are missing, the model uses training-population defaults and explicit missingness indicators. Patient-facing text says that the estimate is not fully personalised.",
         "- Missing or unspecified sex is never described as the patient's own sex.",
         f"- Activity above {MODEL_ACTIVITY_MAX_MINUTES} minutes is capped to the training contract, and that adjustment is disclosed to the patient.",
         f"- The population estimate is omitted for an age outside the model's supported {MODEL_AGE_RANGE[0]}–{MODEL_AGE_RANGE[1]} range.",
-        "- If the versioned model artefact is unavailable, the endpoint continues with readings and lifestyle rules and does not show a population estimate.",
-        "- The deployed artefact, feature contract, checksum and limitations are recorded in `backend/ml/models/MODEL_CARD.md`.",
+        "- Patient-facing contribution explanations are calibrated log-odds differences from a weighted training reference profile. They are described as model points, not percentage points. Any displayed contribution based on a missing input is labelled as missing information rather than behaviour; the overall estimate separately names every defaulted field.",
+        "- The contribution 95% ranges resample training and validation PSUs within strata. They are not causal or complete predictive intervals; the fitted age spline and scaling transform stay fixed.",
+        "- If the versioned model artefact is unavailable or fails its digest/contract check, the endpoint silently continues with readings and lifestyle rules and does not show a population estimate.",
+        "- The optional model bundle is loaded and validated during application startup. A real loopback Uvicorn HTTP gate checks that both the first request and p95 remain below 300 ms without an LLM.",
+        "- Low and very-high readings always use safety wording only. No model estimate or lifestyle advice is attached to them.",
+        "- Patient-facing recommendation output never contains a diagnosis or any medication/drug/dose content, medication or treatment timing, treatment start/stop instructions, or treatment-change advice.",
+        "- The deployed artefact, feature contract, checksum, subgroup results and limitations are recorded in `backend/ml/models/MODEL_CARD.md` and `backend/ml/DATA_CARD.md`.",
         f"- **Published model identity:** version `{RUNTIME_MODEL_VERSION}`; SHA-256 `{RUNTIME_MODEL_SHA256}`; features "
         f"`{', '.join(RUNTIME_MODEL_FEATURES)}`.",
         "",

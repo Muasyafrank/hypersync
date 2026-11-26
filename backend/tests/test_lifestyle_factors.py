@@ -24,7 +24,7 @@ class RankFactors(unittest.TestCase):
         self.assertEqual(ranked[0]["feature"], "smoked")
         self.assertTrue(ranked[0]["data_supported"])
         self.assertFalse(ranked[1]["data_supported"])
-        self.assertIn("survey data", ranked[0]["message"])
+        self.assertIn("survey model also found an association", ranked[0]["message"])
         self.assertNotIn("survey data", ranked[1]["message"])
 
     def test_limit_is_respected(self):

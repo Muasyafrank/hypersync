@@ -1,7 +1,16 @@
-Kenya STEPS 2015, n=4282, features=['age', 'sex', 'smoked', 'alcohol_consumed', 'salt_score', 'activity_minutes', 'diet_adherence']
+Kenya STEPS 2015, weighted model rows=4278, features=['age', 'sex', 'smoked', 'alcohol_consumed', 'salt_score', 'activity_minutes', 'diet_adherence']
 
-logistic (deployed)    CV AUC 0.656 +/- 0.005  Brier 0.2253
-random forest (v2)     CV AUC 0.656 +/- 0.005  Brier 0.2313
-gradient boosting      CV AUC 0.655 +/- 0.004  Brier 0.2265
+Selected C: 0.2
+Locked weighted test: AUROC 0.6372, PR-AUC 0.4983, Brier 0.2234
+Calibration slope 1.0388, intercept 0.0361
 
-Hold-out at threshold 0.42: sensitivity 0.57, specificity 0.64, AUC 0.629
+female       n=532 AUROC 0.6929 PR-AUC 0.5564 Brier 0.2146
+male         n=339 AUROC 0.5846 PR-AUC 0.4569 Brier 0.2328
+age_18_39    n=517 AUROC 0.6024 PR-AUC 0.3982 Brier 0.2108
+age_40_59    n=263 AUROC 0.5097 PR-AUC 0.4984 Brier 0.2513
+age_60_69    n= 91 AUROC 0.4465 PR-AUC 0.6916 Brier 0.2454
+age_18_29    n=281 AUROC 0.5603 PR-AUC 0.3897 Brier 0.1904
+age_30_44    n=317 AUROC 0.5147 PR-AUC 0.4367 Brier 0.2479
+age_45_59    n=182 AUROC 0.4849 PR-AUC 0.5184 Brier 0.2532
+rural        n=454 AUROC 0.6558 PR-AUC 0.5196 Brier 0.2233
+urban        n=417 AUROC 0.5670 PR-AUC 0.4302 Brier 0.2236

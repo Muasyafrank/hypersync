@@ -9,7 +9,7 @@ import { useSubmit } from '../hooks/useSubmit';
 import { useRecommendations } from '../context/RecommendationsContext';
 import { useToast } from '../context/ToastContext';
 import { createReading } from '../api/readings';
-import { classifyBP, statusInfo, STATUS_NOTES } from '../utils/bpStatus';
+import { classifyBP, isVeryHighBP, statusInfo, STATUS_NOTES, veryHighSafetyMessage } from '../utils/bpStatus';
 import { toLocalDateTimeInput, toTriState } from '../utils/format';
 
 // Mirrors the Field(ge=…, le=…) constraints in backend/app/schemas/reading.py.
@@ -109,13 +109,23 @@ export default function LogReading() {
       });
       // Recompute the advice from the new reading and wait for it, so the page we land on is already current.
       const refreshed = await dataChanged();
-      if (refreshed) {
+      const urgentMessage = veryHighSafetyMessage(created.systolic, created.diastolic);
+      if (urgentMessage) {
+        // The urgent wording comes from the reading that was saved, not from a
+        // recommendation request. It must survive a failed refresh.
+        toast.error(urgentMessage, 12_000);
+      } else if (refreshed) {
         toast.success(`Reading saved: ${statusInfo(created.status).label} status recorded. Your recommendations are up to date.`);
       } else {
         toast.warning('Reading saved, but recommendations could not be refreshed. Open Recommendations to retry.');
       }
+      const navigationState = {};
+      if (refreshed) navigationState.justUpdated = 'reading';
+      if (urgentMessage) {
+        navigationState.urgentReading = { systolic: created.systolic, diastolic: created.diastolic };
+      }
       navigate('/recommendations', {
-        state: refreshed ? { justUpdated: 'reading' } : undefined,
+        state: Object.keys(navigationState).length ? navigationState : undefined,
       });
     },
     { fallback: 'Could not save reading.', onError: (message) => toast.error(message) },
@@ -126,6 +136,10 @@ export default function LogReading() {
     [values.systolic, values.diastolic],
   );
   const liveInfo = liveStatus ? statusInfo(liveStatus) : null;
+  const liveVeryHigh = isVeryHighBP(Number(values.systolic) || null, Number(values.diastolic) || null);
+  const previewNote = liveVeryHigh
+    ? 'This reading is very high. Seek urgent medical care and do not rely on this app for advice.'
+    : STATUS_NOTES[liveStatus];
 
   return (
     <Layout>
@@ -246,7 +260,7 @@ export default function LogReading() {
                   value={values.notes}
                   onChange={handleChange}
                   maxLength={1000}
-                  placeholder="How are you feeling? Did you take medication?"
+                  placeholder="How are you feeling? Any symptoms?"
                 />
               </Form.Group>
 
@@ -279,7 +293,7 @@ export default function LogReading() {
                       {liveInfo.label}
                     </span>
                   )}
-                  <p className="hs-preview-note">{STATUS_NOTES[liveStatus]}</p>
+                  <p className="hs-preview-note">{previewNote}</p>
                 </>
               ) : (
                 <p className="hs-preview-empty">

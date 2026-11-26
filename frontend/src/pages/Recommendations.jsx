@@ -8,6 +8,7 @@ import { EmptyState, ErrorState, Loader, PageHeader, Panel } from '../components
 import { useRecommendations } from '../context/RecommendationsContext';
 import { formatTime } from '../utils/format';
 import { groupRecommendations } from '../utils/recommendations';
+import { veryHighSafetyMessage } from '../utils/bpStatus';
 
 const JUST_UPDATED = {
   reading: 'Updated with your new reading.',
@@ -27,6 +28,10 @@ export default function Recommendations() {
   // The banner after saving something. Held in state, and cleared from the router state so
   // reloading the page doesn't announce an update that happened earlier.
   const [banner, setBanner] = useState(JUST_UPDATED[location.state?.justUpdated] ?? null);
+  const [urgentReading, setUrgentReading] = useState(location.state?.urgentReading ?? null);
+  useEffect(() => {
+    if (location.state?.urgentReading) setUrgentReading(location.state.urgentReading);
+  }, [location.state]);
   useEffect(() => {
     if (location.state?.justUpdated) navigate(location.pathname, { replace: true, state: null });
   }, [location.pathname, location.state, navigate]);
@@ -36,6 +41,9 @@ export default function Recommendations() {
   }, [recommendationsError]);
 
   const groups = groupRecommendations(items);
+  const urgentMessage = urgentReading
+    ? veryHighSafetyMessage(urgentReading.systolic, urgentReading.diastolic)
+    : null;
   const busy = status === 'idle' || status === 'loading' || status === 'refreshing';
 
   return (
@@ -45,6 +53,12 @@ export default function Recommendations() {
           title="Recommendations"
           subtitle="Advice from your readings and what you've logged. It updates as soon as you add a reading or a daily check-in."
         />
+
+        {urgentMessage && (
+          <Alert variant="danger" role="alert" className="mb-3">
+            {urgentMessage}
+          </Alert>
+        )}
 
         {/* Announced to screen readers when the advice changes. */}
         <div aria-live="polite">
@@ -108,7 +122,7 @@ export default function Recommendations() {
         </div>
 
         <p className="hs-reading-meta mt-4 mb-0">
-          These are general suggestions, not a diagnosis. Talk to your clinician before changing any medication.
+          These are general suggestions. Discuss your readings and health history with your clinician.
         </p>
       </Container>
     </Layout>

@@ -28,9 +28,9 @@ This opening prevents the demo from overstating the system.
    - concrete actions for logged habits;
    - survey context explained in the summary;
    - system/coverage messages.
-5. Daniel demonstrates the advice cap: smoking and medication-not-taken remain visible, and the overflow message names the other habits **and retains their actions**.
+5. Daniel demonstrates the advice cap: smoking remains visible, while medication information stays out of patient output. The overflow message names the other habits **and retains their actions**.
 
-**Expected Daniel outcome:** high band; smoking and medication-not-taken present; no personal pattern because there are no safe comparison days; advice includes an overflow item with concrete actions.
+**Expected Daniel outcome:** high band; smoking present; no medication or treatment advice; no personal pattern because there are no safe comparison days; advice includes an overflow item with concrete actions.
 
 ### B. Transparent personal pattern (1–2 minutes)
 
@@ -60,8 +60,8 @@ This opening prevents the demo from overstating the system.
 3. Point to the coverage message saying exactly how many paired days are still needed for personal patterns.
 4. Optionally log in as Joseph (`demo.joseph@example.com`) to show the low-band wording and the clinician-only sustained-low review.
 
-**Expected Amina outcome:** high trend, medication-not-taken action, and an exact logging target.
-**Expected Joseph outcome:** low-band guidance says to contact the clinician if dizzy or unwell.
+**Expected Amina outcome:** high trend, no medication or treatment advice, and an exact logging target.
+**Expected Joseph outcome:** low-band safety wording says to contact the clinician if dizzy or unwell. No lifestyle advice is attached.
 
 ### E. Clinician workflow and role isolation (3 minutes)
 
@@ -109,17 +109,20 @@ Seed before the presentation from `backend/`:
 python -m scripts.seed_demo_30_days
 ```
 
-The seed is deterministic and refreshes only the `@example.com` demo accounts.
+The seed is deterministic and refreshes only the `@example.com` demo accounts. The personas, readings, and logs are synthetic behavioural fixtures for exercising the workflow. They are not study participants, validation data, or evidence of model performance or clinical benefit.
 
 ## 4. Evidence to mention
 
 - The recommendation endpoint recomputes from current data on every request and sends `Cache-Control: no-store`.
 - The patient's own readings and the survey-model estimate are displayed separately; they are not blended into an invented risk score.
-- Missing profile/lifestyle inputs are disclosed in the patient-facing text, and the model uses recorded training-population medians.
+- Missing profile/lifestyle inputs are disclosed in the patient-facing text, and the model uses recorded training-population defaults with explicit missingness flags.
+- The model uses the STEPS measurement weight, locked PSU-grouped splits, regularised logistic regression, and validation-only calibration.
+- The model's per-prediction contributions include 95% PSU-bootstrap ranges that resample both training and validation PSUs, and are labelled non-causal.
 - One lifestyle check-in per local day is enforced by both API and database; medication adherence and habit patterns count distinct days.
 - The accessible trend chart expands to an exact-value table and scales beyond 200 mmHg.
 - The clinical wording is generated from code, and a drift test detects divergence between the code and the generated sheet; it does not verify clinical sign-off.
-- The committed model has a version, SHA-256 checksum, feature contract and model card.
+- The committed model has a version, SHA-256 checksum, exact feature contract, model card, data card, locked split and measured subgroup results.
+- A real loopback Uvicorn HTTP gate checks that the first recommendation request and p95 remain below 300 ms without an LLM.
 
 Run the verification commands live only if time allows; do not turn the presentation into a test-console reading.
 
@@ -140,11 +143,12 @@ A manual PostgreSQL upgrade → downgrade → upgrade check and a clean-checkout
 ## 5. Boundaries to state clearly
 
 1. **Manual entry only.** There is no Bluetooth, device-data ingestion or CSV import. The browser uses the project's own API to store and retrieve the data patients enter.
-2. **No emergency tier.** `180/110` remains in the High band. No emergency protocol is inferred or invented.
+2. **Safety route, public band unchanged.** `180/110` remains stored as High, but the recommendation engine treats systolic at least 180 or diastolic at least 110 as very high. It gives urgent-care wording only, with no model or lifestyle content. Low readings also use safety wording only.
 3. **Unsigned clinical wording.** The review sheet's sign-off table is blank. It must not be called approved guidance.
-4. **Population model, not diagnosis.** The Kenya STEPS estimate is contextual; cross-validated AUC is about 0.656 and hold-out AUC about 0.629. These are model metrics, not evidence of clinical benefit.
-5. **Treatment-review flag is decision support.** It prompts clinician review and provides a 28-day follow-up window after a recorded review; it does not recommend a drug, dose or titration, and the adequacy of the window is a clinical judgement.
-6. **No clinical validation claims.** This repository cannot establish safety, usability with real patients, or clinical effectiveness.
+4. **Population model, not diagnosis.** The patient-facing estimate names the 2015 Kenya STEPS source and year. Locked-test weighted AUROC is 0.634 and PR-AUC is 0.498. These are model metrics, not evidence of clinical benefit.
+5. **Subgroup limits are visible.** The age 60–69 test subgroup has AUROC 0.408 and unstable calibration. The overall result must not be generalized to every user.
+6. **Treatment-review flag is decision support.** It prompts clinician review and provides a 28-day follow-up window after a recorded review; it does not recommend a drug, dose or titration, and the adequacy of the window is a clinical judgement. Medication information never appears in patient recommendations.
+7. **No clinical validation claims.** This repository cannot establish safety, usability with real patients, or clinical effectiveness.
 
 ## 6. Likely questions and concise answers
 
@@ -154,7 +158,7 @@ No. This version is manual-input only. Device ingestion would be a separate impl
 
 ### “What happens at 180/110?”
 
-It is classified as High. There is no `180/110` urgent category and no emergency escalation protocol. Adding one needs authorised clinical guidance; the repository deliberately does not guess.
+The stored public band is still High. The recommendation engine has a separate very-high safety route. It tells the patient to seek urgent medical care and suppresses the model and lifestyle content. Any low reading in the same window also gets safety wording only.
 
 ### “Is the advice clinically approved?”
 
@@ -162,11 +166,11 @@ No. It is general lifestyle wording gathered in `docs/advice-for-clinical-review
 
 ### “How accurate is the model?”
 
-Cross-validated AUC is about 0.656 and the 20% hold-out AUC is about 0.629. It is a modest population estimate, not an individual diagnosis or a prediction of treatment response.
+The untouched, survey-weighted locked-test AUROC is 0.634 and PR-AUC is 0.498. Calibration is close overall, but subgroup performance varies and the age 60–69 subgroup is poor. It is a modest population estimate, not an individual diagnosis or a prediction of treatment response.
 
 ### “How do you avoid advice driven by incomplete data?”
 
-The app says when profile or lifestyle inputs are missing and uses recorded training-population defaults. It does not describe an unspecified sex as the patient's own. Personal patterns require paired days on both sides of a comparison and are explicitly described as correlation, not cause.
+The app says when profile or lifestyle inputs are missing. It uses recorded training-population defaults and explicit missingness flags. It does not describe an unspecified sex as the patient's own. Model contributions include 95% ranges and say when direction is uncertain. Personal patterns require paired days on both sides of a comparison and are explicitly described as correlation, not cause.
 
 ### “How do you know the data is consistent?”
 
@@ -174,7 +178,7 @@ The API rejects empty, future and duplicate same-day check-ins; the database has
 
 ### “What is the biggest next step?”
 
-Authorised clinical review of thresholds and wording, a validated emergency/escalation protocol if required, real-user usability and safety validation, and prospective evaluation of whether the recommendations improve outcomes.
+Authorised clinical review of thresholds and wording, prospective local subgroup validation, real-user usability and safety validation, and evaluation of whether the recommendations improve outcomes.
 
 ## 7. Contingency plan
 

@@ -2,7 +2,31 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
+from app.core.bp_classification import is_very_high_bp
 from app.models.alert import Alert
+
+
+def maybe_create_acute_safety_alert(db: Session, patient_id, reading) -> Alert | None:
+    """Record every very-high individual reading for clinician review.
+
+    This is separate from the seven-day trend alert. One acute very-high
+    reading can be hidden by a normal average, so it must remain visible even
+    when the patient's trend is otherwise controlled.
+    """
+    if not is_very_high_bp(reading.systolic, reading.diastolic):
+        return None
+
+    alert = Alert(
+        patient_id=patient_id,
+        alert_type="very_high_reading",
+        message=(
+            f"A very high blood-pressure reading was recorded ({reading.systolic}/{reading.diastolic} mmHg). "
+            "Urgent clinician review is recommended."
+        ),
+    )
+    db.add(alert)
+    db.flush()
+    return alert
 
 
 def maybe_create_alert(db: Session, patient_id, trend_status: str, period_days: int) -> Alert | None:

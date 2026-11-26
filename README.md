@@ -14,15 +14,23 @@ the patient's own log and a model trained on the Kenya STEPS 2015 NCD survey.
   phone.
 - The current bands are checked in this order: **low** below 90 systolic or 60
   diastolic; otherwise **high** at 150 systolic or 90 diastolic or above;
-  otherwise **elevated** at 135 systolic or 85 diastolic or above. There is
-  deliberately **no `180/110` urgent tier** and no emergency protocol;
-  authorised clinical input is required before adding one.
+  otherwise **elevated** at 135 systolic or 85 diastolic or above. The public
+  band remains `high`, but an internal safety boundary at **180 systolic or 110
+  diastolic** routes any such reading to urgent-care wording only. Any low or
+  very-high reading in the current recommendation window suppresses model and
+  lifestyle content.
 - The advice and thresholds are a **clinically reviewable prototype**, not
   approved clinical guidance. The review sheet is deliberately unsigned:
   `docs/advice-for-clinical-review.md`.
 - The survey model supplies a population estimate as context. It is not a
   diagnosis, an individual risk forecast, or evidence that the app improves
   clinical outcomes.
+- The model and patient templates run locally. No external LLM is used, and no
+  patient data is sent to a third-party inference service.
+- Patient-facing recommendation output never contains a diagnosis or any
+  medication/drug/dose content, medication or treatment timing, treatment
+  start/stop instructions, or treatment-change advice. Treatment review remains
+  clinician-only.
 
 ## Structure
 
@@ -35,8 +43,8 @@ backend/          FastAPI + PostgreSQL + SQLAlchemy
     schemas/      Pydantic request/response models
     routers/      HTTP endpoints, grouped by resource
   alembic/        database migrations
-  ml/             STEPS data pipeline, training script, versioned model +
-                  checksum/model card
+  ml/             STEPS data pipeline, locked survey build, versioned model +
+                  checksum, data card and model card
   scripts/        admin/clinician provisioning, test-data seeding
   data/           local raw survey data (not versioned) and the seed workbook
   tests/          pytest suite (unit tests + API tests on throw-away SQLite)
@@ -76,6 +84,7 @@ cd backend
 python -m venv hyper && source hyper/bin/activate   # Windows: hyper\Scripts\activate
 pip install -r requirements.txt          # add -r requirements-dev.txt for tests/lint/seeding
                                          # add -r requirements-ml.txt to retrain the model
+                                         # ml/requirements-lock.txt pins the full resolved build
 
 cp .env.example .env        # then fill in DATABASE_URL and SECRET_KEY
 alembic upgrade head
@@ -107,9 +116,10 @@ API docs at http://localhost:8000/docs
 A clean checkout does not need the raw STEPS survey file for normal operation:
 the small versioned runtime model is committed under `backend/ml/models/`, with
 its checksum, model card and feature contract. Retraining is an optional
-maintenance task that additionally requires `requirements-ml.txt` and the
-separately obtained `data/2015_STEPS_Data.sav`; see
-`backend/ml/models/MODEL_CARD.md`.
+maintenance task that additionally requires the pinned environment in
+`backend/ml/requirements-lock.txt` and the separately obtained
+`data/2015_STEPS_Data.sav`; see `backend/ml/models/MODEL_CARD.md` and
+`backend/ml/DATA_CARD.md`.
 
 Provisioning and sample data (run from `backend/`):
 
@@ -205,16 +215,16 @@ size). If something renders unstyled after you add a component or class, add
 its partial there; `npm run check:css` fails when the code uses a Bootstrap
 class the build leaves out.
 
-**Recommendations come from the log, not just the latest entry.** Eleven
-things can be logged: stress, sleep, diet, medication, salt, caffeine, alcohol,
-smoking, activity, **temperature** and **noise**. Each reading can also record
+**Recommendations come from the log, not just the latest entry.** Ten
+patient-facing habits can be logged: stress, sleep, diet, salt, caffeine,
+alcohol, smoking, activity, **temperature** and **noise**. The check-in also
+records medication use for the clinician-only treatment-review feature. That
+information never appears in patient recommendations. Each reading can record
 whether it was taken **rested** and **without coffee/tea, smoking or exercise
-beforehand**. The medication check distinguishes “no prescribed medication”
-from “medication not taken”, so patients without medication are not counted as
-non-adherent. `app/core/factor_insights.py` holds the rules:
+beforehand**. `app/core/factor_insights.py` holds the rules:
 
-- every logged habit has a risk rule *and* a concrete tip (a test fails if one
-  is missing);
+- every patient-facing habit has a risk rule *and* a concrete tip (a test fails
+  if one is missing);
 - a habit is raised when risky on the latest entry or on 2+ days in the period;
 - when the patient's readings are clearly higher (5+ mmHg, 2+ days each side) on
   their risky days than on their other days, that is stated with the numbers;
@@ -224,8 +234,9 @@ non-adherent. `app/core/factor_insights.py` holds the rules:
 - a patient who logs too sparsely is told exactly how many more days of both
   readings and logs unlock their own patterns;
 - anything cut for space is named and retains its concrete action rather than
-  being reduced to a label; controlled and low readings still get short,
-  actionable preventive guidance.
+  being reduced to a label;
+- low and very-high readings get safety wording only. No model estimate or
+  lifestyle advice is attached.
 
 **Recommendations are live.** `GET /recommendations/me` works the advice out from
 the patient's data on every request (nothing is served from a cache, and the
@@ -246,15 +257,24 @@ on the same day (HTTP 409). The database enforces the same daily rule, and
 legacy calculations count distinct days so duplicate rows cannot inflate
 adherence or habit patterns.
 
-**The survey estimate is qualified honestly.** When age, sex or lifestyle
-inputs are missing, the model uses its recorded training-population medians and
-the patient-facing text names the defaulted fields and says the estimate is not
-fully personalised. An unspecified sex is never presented as the patient's own
-sex. Activity above the model's 240-minute training cap is capped and the
-adjustment is disclosed. The estimate is omitted for an age outside the model's
-supported 18–100 range. If the model artefact is missing, corrupt or
-incompatible, the endpoint still works from readings and lifestyle rules and
-omits the population estimate rather than failing.
+**The survey estimate is qualified honestly.** Version 4 uses the STEPS
+measurement weight, locked PSU-grouped splits, regularised logistic regression,
+and validation-only Platt calibration. When age, sex or lifestyle inputs are
+missing, the model uses its recorded training-population defaults and explicit
+missingness flags. The patient-facing text names the defaulted fields and says
+the estimate is not fully personalised. An unspecified sex is never presented
+as the patient's own sex. Activity above the model's 240-minute training cap is
+capped and the adjustment is disclosed. The estimate is omitted outside the
+supported 18–69 range. Its two largest feature contributions include 95%
+bootstrap ranges that resample both training and validation PSUs, and the text
+says when a range crosses zero. Any displayed contribution based on a missing
+input is labelled as missing information rather than as patient behaviour; the
+overall estimate also names every defaulted field. If the
+model artefact is missing, corrupt or incompatible, the endpoint still works from
+readings and lifestyle rules and silently omits the population estimate rather
+than failing. The optional bundle is loaded and validated during application
+startup. A real loopback Uvicorn HTTP regression gate asserts that both the
+first request and p95 stay below 300 ms without an LLM.
 
 **Treatment-review flag (clinicians only).** `app/core/treatment_review.py`
 splits the last 4 weeks into 7-day weeks and flags a patient whose weekly
@@ -278,13 +298,16 @@ clinical review or sign-off. The current sheet is intentionally **unsigned**
 and must not be described as clinically approved.
 
 **The model has an explicit identity.** `backend/ml/models/MODEL_CARD.md` records
-the feature contract, data provenance, thresholds, evaluation, intended use,
-limitations, version and SHA-256 checksum. The runtime verifies the published
-checksum before unpickling the artefact, then validates its version, exact
-feature contract, input domains, labels, thresholds and effect metadata before
-using it. `SHA256SUMS` and `tests/test_model_artifact.py` keep the committed
-files consistent with that identity. The model card does not claim clinical
-benefit.
+the feature contract, data provenance, thresholds, locked-test metrics, subgroup
+results, calibration, contribution uncertainty, intended use, limitations,
+version and SHA-256 checksum. `backend/ml/DATA_CARD.md` records data lineage,
+cleaning, exclusions, weights, splits, and hashes. The runtime verifies the
+published checksum before unpickling the artefact, then validates its version,
+exact feature/input contract, defaults, labels, thresholds, calibration,
+contribution arrays, effects, and provenance hashes before using it.
+`SHA256SUMS` and the model tests keep the committed files consistent with that
+identity. The model card does not claim clinical benefit. The plain-language
+limits and ethics statement is in `docs/limitations-and-ethics.md`.
 
 **Lists ask for what they show.** The dashboard fetches 5 readings plus a
 `/readings/me/summary` count, not the whole history.

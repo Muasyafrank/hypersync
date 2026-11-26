@@ -1,5 +1,6 @@
-# Tests, linting and the seed script.
--r requirements.txt
+# Tests, linting and the seed script. The ML build dependencies are included
+# so pipeline and training-contract tests can import the real training code.
+-r requirements-ml.txt
 
 pytest==9.2.0
 httpx==0.28.1     # FastAPI TestClient

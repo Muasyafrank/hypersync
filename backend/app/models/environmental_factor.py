@@ -1,8 +1,7 @@
 import enum
 import uuid
 
-from sqlalchemy import Boolean, Column, Date, DateTime, Enum, Float, ForeignKey, Integer, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Boolean, Column, Date, DateTime, Enum, Float, ForeignKey, Integer, UniqueConstraint, Uuid
 from sqlalchemy.orm import backref, relationship
 from sqlalchemy.sql import func
 
@@ -44,8 +43,8 @@ class EnvironmentalFactor(Base):
         ),
     )
 
-    factor_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    patient_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True)
+    factor_id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    patient_id = Column(Uuid(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True)
     stress_level = Column(Enum(StressLevel, name="stresslevel"), nullable=True)
     sleep_hours = Column(Float, nullable=True)
     diet_adherence = Column(Boolean, nullable=True)

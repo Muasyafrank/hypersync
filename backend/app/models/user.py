@@ -1,8 +1,7 @@
 import enum
 import uuid
 
-from sqlalchemy import Column, Date, DateTime, Enum, ForeignKey, String
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, Date, DateTime, Enum, ForeignKey, String, Uuid
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -25,7 +24,7 @@ class SexEnum(str, enum.Enum):
 class User(Base):
     __tablename__ = "users"
 
-    user_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
     role = Column(Enum(UserRole), nullable=True, default=UserRole.patient)
 
@@ -49,9 +48,9 @@ class User(Base):
 class PatientProfile(Base):
     __tablename__ = "patient_profiles"
 
-    profile_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    profile_id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, unique=True)
+    user_id = Column(Uuid(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, unique=True)
 
     date_of_birth = Column(Date, nullable=True)
 

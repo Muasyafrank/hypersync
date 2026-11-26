@@ -9,6 +9,10 @@
  */
 
 const INTAKE = { options: ['none', 'low', 'moderate', 'high'], labels: ['None', 'Low', 'Moderate', 'High'] };
+const SALT_INTAKE = {
+  options: ['none', 'low', 'moderate', 'high'],
+  labels: ['Never', 'Not every week', 'Most meals', 'Every meal'],
+};
 
 export const STEPS = [
   { key: 'when', label: 'For', question: 'When is this for?', type: 'when' },
@@ -20,15 +24,22 @@ export const STEPS = [
     key: 'sleep_hours', label: 'Sleep', question: 'How many hours did you sleep?', type: 'number',
     unit: 'hours', min: 0, max: 24, step: 0.5, placeholder: 'e.g. 7',
   },
-  { key: 'salt_intake', label: 'Salt', question: 'How much salt did you eat?', type: 'choice', ...INTAKE },
-  { key: 'caffeine_intake', label: 'Coffee or tea', question: 'How much coffee or tea did you drink?', type: 'choice', ...INTAKE },
-  { key: 'alcohol_consumed', label: 'Alcohol', question: 'Did you drink alcohol?', type: 'bool' },
-  { key: 'smoked', label: 'Smoked', question: 'Did you smoke?', type: 'bool' },
   {
-    key: 'physical_activity_minutes', label: 'Activity', question: 'How many minutes did you move or walk?', type: 'number',
-    unit: 'minutes', min: 0, max: 1440, step: 5, placeholder: 'e.g. 30', integer: true,
+    key: 'salt_intake', label: 'Salt', question: 'How often do you add salt to your food?', type: 'choice',
+    ...SALT_INTAKE,
   },
-  { key: 'diet_adherence', label: 'Diet as advised', question: 'Did you eat as your clinic advised?', type: 'bool' },
+  { key: 'caffeine_intake', label: 'Coffee or tea', question: 'How much coffee or tea did you drink?', type: 'choice', ...INTAKE },
+  { key: 'alcohol_consumed', label: 'Alcohol', question: 'Have you drunk any alcohol in the last 30 days?', type: 'bool' },
+  { key: 'smoked', label: 'Smoked', question: 'Do you currently smoke?', type: 'bool' },
+  {
+    key: 'physical_activity_minutes', label: 'Activity',
+    question: 'On a usual day, how many active minutes do you do, including work, walking, and sport?',
+    type: 'number', unit: 'minutes', min: 0, max: 1440, step: 5, placeholder: 'e.g. 60', integer: true,
+  },
+  {
+    key: 'diet_adherence', label: 'Fruit and vegetables',
+    question: 'Do you usually eat at least five servings of fruit and vegetables each day?', type: 'bool',
+  },
   {
     key: 'medication_prescribed',
     label: 'Medication prescribed',

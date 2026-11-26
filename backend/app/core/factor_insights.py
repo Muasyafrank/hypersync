@@ -5,9 +5,10 @@ in ml_recommendation_engine.py feeds them the logged entries and daily readings.
 
 Three ideas:
 
-1. **Every logged habit is covered.** Eleven things can be logged; each has one
-   rule for "this points the unhealthy way" (RISK_PREDICATES) and one concrete
-   tip for avoiding it (TIPS). Nothing that is logged is silently ignored.
+1. **Every patient-facing habit is covered.** Ten logged habits have one rule
+   for "this points the unhealthy way" (RISK_PREDICATES) and one concrete tip
+   for avoiding it (TIPS). The app still collects a clinician-only adherence
+   field, but patient recommendations never mention it.
 
 2. **Patterns over days, not just the latest entry.** A habit is raised when
    it was risky on the most recent entry or on at least two days in the
@@ -50,7 +51,6 @@ RISK_PREDICATES = {
     "sleep_hours": lambda v: v < 6,
     "stress_level": lambda v: _value(v) == "high",
     "caffeine_intake": lambda v: _value(v) == "high",
-    "medication_taken": lambda v: not v,
     "temperature_feel": lambda v: _value(v) == "cold",  # cold narrows blood vessels
     "noise_level": lambda v: _value(v) == "loud",
 }
@@ -58,15 +58,14 @@ RISK_PREDICATES = {
 # The same rules in plain words, for the clinical review sheet (app/core/clinical_review.py).
 # A test makes sure every rule above has an entry here.
 RISK_TEXT = {
-    "salt_intake": "Moderate or high",
-    "alcohol_consumed": "Any alcohol",
-    "smoked": "Smoked",
-    "physical_activity_minutes": "Under 20 minutes",
-    "diet_adherence": "Did not follow the advised diet",
+    "salt_intake": "Moderate or high salt frequency",
+    "alcohol_consumed": "Any alcohol in the last 30 days",
+    "smoked": "Currently smokes",
+    "physical_activity_minutes": "Under 20 active minutes/day",
+    "diet_adherence": "Below five fruit and vegetable servings/day",
     "sleep_hours": "Under 6 hours",
     "stress_level": "High",
     "caffeine_intake": "High",
-    "medication_taken": "Medication not taken as advised",
     "temperature_feel": "Cold",
     "noise_level": "Loud",
 }
@@ -95,12 +94,10 @@ RULE_MESSAGES = {
     "caffeine_intake": (
         "You've logged a lot of coffee or tea. Caffeine can push blood pressure up for a few hours after each cup."
     ),
-    "medication_taken": "You've logged that your medication was not taken as advised. Not taking medication can be associated with higher readings.",
     "temperature_feel": "You've logged cold weather. Cold narrows blood vessels and can push blood pressure up.",
     "noise_level": "You've logged a loud day. Ongoing loud noise is a stressor and is linked to higher blood pressure.",
 }
 RULE_ORDER = [
-    "medication_taken",
     "sleep_hours",
     "stress_level",
     "caffeine_intake",
@@ -135,9 +132,6 @@ TIPS = {
         "Keep to one or two cups a day, have none after mid-afternoon, and wait 30 minutes after a cup "
         "before measuring your blood pressure."
     ),
-    "medication_taken": (
-        "Set a phone reminder and tell your clinician if your medication is repeatedly not taken as advised."
-    ),
     "temperature_feel": (
         "Dress in warm layers (head, hands and feet especially), warm up indoors before measuring, and avoid "
         "stepping straight from a warm bed into the cold."
@@ -150,15 +144,17 @@ TIPS = {
 
 # "...on the N days you <RISKY>" versus "...on the M days you <SAFE>".
 DESCRIPTIONS = {
-    "salt_intake": ("ate a moderate or high amount of salt", "ate little salt"),
-    "alcohol_consumed": ("drank alcohol", "didn't drink alcohol"),
-    "smoked": ("smoked", "didn't smoke"),
+    "salt_intake": ("add salt often", "add salt less often"),
+    "alcohol_consumed": ("drank alcohol in the last 30 days", "did not drink alcohol in the last 30 days"),
+    "smoked": ("currently smoke", "do not currently smoke"),
     "physical_activity_minutes": ("were active for under 20 minutes", "were more active"),
-    "diet_adherence": ("didn't eat as advised", "ate as advised"),
+    "diet_adherence": (
+        "ate fewer than five fruit and vegetable servings",
+        "ate at least five fruit and vegetable servings",
+    ),
     "sleep_hours": ("slept under 6 hours", "slept 6 hours or more"),
     "stress_level": ("logged high stress", "logged lower stress"),
     "caffeine_intake": ("had a lot of coffee or tea", "had less coffee or tea"),
-    "medication_taken": ("did not take medication as advised", "took medication as advised"),
     "temperature_feel": ("logged cold weather", "logged mild or hot weather"),
     "noise_level": ("had a loud day", "had a quiet or moderate day"),
 }
@@ -168,11 +164,10 @@ LABELS = {
     "alcohol_consumed": "alcohol",
     "smoked": "smoking",
     "physical_activity_minutes": "physical activity",
-    "diet_adherence": "diet",
+    "diet_adherence": "fruit and vegetables",
     "sleep_hours": "sleep",
     "stress_level": "stress",
     "caffeine_intake": "coffee or tea",
-    "medication_taken": "medication not taken",
     "temperature_feel": "cold weather",
     "noise_level": "noise",
 }
@@ -377,9 +372,10 @@ def build_advice(
 
     Each item is {"message", "source"} with source "pattern" (from the
     patient's own readings), "model" (the survey data supports it) or "rule"
-    (general clinical guidance). Order: how the readings were taken, own patterns, medication not taken, the
-    survey-ranked habits (smoking first among them), then the remaining guidance
-    rules. Anything beyond `limit` is summarised in one closing line rather than dropped.
+    (general clinical guidance). Order: how the readings were taken, own patterns,
+    the survey-ranked habits (smoking first among them), then the remaining guidance
+    rules. Patient output never includes medication or treatment advice.
+    Anything beyond `limit` is summarised in one closing line rather than dropped.
     """
     history = summarize_log(entries)
     flagged = flagged_fields(history, window_start)
@@ -412,10 +408,6 @@ def build_advice(
             "source": "rule",
             "fields": [name],
         }
-
-    if "medication_taken" in flagged and "medication_taken" not in covered:
-        advice.append(rule_item("medication_taken"))
-        covered.add("medication_taken")
 
     model_values = {
         feature: (_RISKY_VALUE if _FIELD_OF[feature] in flagged else _HEALTHY_VALUE)[feature] for feature in _FIELD_OF

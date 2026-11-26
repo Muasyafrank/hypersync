@@ -33,14 +33,17 @@ HARMFUL_DIRECTION = {
 }
 
 GUIDELINE_MESSAGES = {
-    "salt_score": "Your logged salt intake has been moderate or high. Cutting back on added salt and salty processed foods is one of the most effective lifestyle changes for lowering blood pressure.",
-    "alcohol_consumed": "You've logged alcohol consumption recently. Drinking less alcohol helps lower blood pressure.",
-    "activity_minutes": "Your logged physical activity has been low. Regular moderate activity, such as brisk walking on most days, helps lower blood pressure.",
+    "salt_score": "Your logged salt frequency has been moderate or high. Cutting back on added salt and salty processed foods can help lower blood pressure.",
+    "alcohol_consumed": "You've logged alcohol use in the last 30 days. Drinking less alcohol helps lower blood pressure.",
+    "activity_minutes": "Your logged usual-day physical activity has been low. Regular moderate activity, such as brisk walking on most days, helps lower blood pressure.",
     "diet_adherence": "You've logged not meeting the recommended fruit and vegetable intake. Eating more fruit and vegetables helps lower blood pressure.",
-    "smoked": "You've logged smoking recently. Smoking raises cardiovascular risk and temporarily raises blood pressure after each cigarette. Consider support resources for quitting.",
+    "smoked": "You've logged that you currently smoke. Smoking raises cardiovascular risk and temporarily raises blood pressure after each cigarette. Consider support resources for quitting.",
 }
 
-DATA_SUPPORTED_SUFFIX = " This also showed up clearly in the national survey data this system is built on."
+DATA_SUPPORTED_SUFFIX = (
+    " The survey model also found an association with this habit. This does not show that changing it will "
+    "change one person's blood pressure."
+)
 
 
 def is_risk_direction(feature: str, value) -> bool:

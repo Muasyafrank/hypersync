@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
-import { alertAccent, ALERT_ACCENTS, classifyBP, statusInfo, THRESHOLDS } from './bpStatus.js';
+import {
+  alertAccent,
+  ALERT_ACCENTS,
+  classifyBP,
+  isVeryHighBP,
+  statusInfo,
+  THRESHOLDS,
+  veryHighSafetyMessage,
+} from './bpStatus.js';
 
 describe('classifyBP', () => {
   const cases = [
@@ -15,7 +23,8 @@ describe('classifyBP', () => {
     [89, 70, 'low'],
     [110, 59, 'low'],
     [90, 60, 'controlled'],
-    [160, 55, 'low'], // low is checked before high
+    [160, 55, 'low'], // low is checked before ordinary high
+    [185, 50, 'high'], // very high takes precedence over a conflicting low value
   ];
 
   for (const [systolic, diastolic, expected] of cases) {
@@ -27,6 +36,33 @@ describe('classifyBP', () => {
   it('returns null while a value is still missing', () => {
     assert.equal(classifyBP(null, 80), null);
     assert.equal(classifyBP(120, null), null);
+  });
+});
+
+describe('isVeryHighBP', () => {
+  it('uses the internal safety boundary without changing the public band', () => {
+    assert.equal(isVeryHighBP(180, 100), true);
+    assert.equal(isVeryHighBP(170, 110), true);
+    assert.equal(isVeryHighBP(179, 109), false);
+    assert.equal(classifyBP(180, 100), 'high');
+  });
+
+  it('returns false while a value is missing', () => {
+    assert.equal(isVeryHighBP(null, 110), false);
+    assert.equal(isVeryHighBP(180, null), false);
+  });
+});
+
+describe('veryHighSafetyMessage', () => {
+  it('builds urgent wording directly from a saved very-high reading', () => {
+    const message = veryHighSafetyMessage(185, 115);
+    assert.match(message, /185\/115/);
+    assert.match(message, /seek urgent medical care/i);
+    assert.match(message, /do not rely on this app/i);
+  });
+
+  it('returns null for an ordinary reading', () => {
+    assert.equal(veryHighSafetyMessage(120, 80), null);
   });
 });
 
@@ -57,7 +93,7 @@ describe('thresholds match backend/app/core/bp_classification.py', () => {
     name.toLowerCase().replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
 
   const backend = Object.fromEntries(
-    [...source.matchAll(/^([A-Z]+_(?:SYSTOLIC|DIASTOLIC))\s*=\s*(\d+)/gm)].map(([, name, value]) => [
+    [...source.matchAll(/^((?:[A-Z]+_)*(?:SYSTOLIC|DIASTOLIC))\s*=\s*(\d+)/gm)].map(([, name, value]) => [
       toCamel(name),
       Number(value),
     ]),

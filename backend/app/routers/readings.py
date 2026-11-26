@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.core.alert_engine import maybe_create_alert
+from app.core.alert_engine import maybe_create_acute_safety_alert, maybe_create_alert
 from app.core.bp_classification import CONTROLLED, ELEVATED, HIGH, LOW, classify_bp
 from app.core.database import get_db
 from app.core.deps import get_timezone, require_clinician, require_patient
@@ -88,6 +88,10 @@ def create_reading(
     # the SAME transaction as the reading, so the two can never disagree.
     trend = compute_trend(db, current_user.user_id, period_days=ALERT_WINDOW_DAYS, tz=tz)
     maybe_create_alert(db, current_user.user_id, trend.status, period_days=ALERT_WINDOW_DAYS)
+
+    # A very-high acute event must not disappear inside a normal seven-day
+    # average. Keep one clinician-review alert for each such reading.
+    maybe_create_acute_safety_alert(db, current_user.user_id, reading)
 
     db.commit()
     db.refresh(reading)

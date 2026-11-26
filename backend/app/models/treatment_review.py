@@ -1,7 +1,6 @@
 import uuid
 
-from sqlalchemy import Column, DateTime, ForeignKey, String
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, DateTime, ForeignKey, String, Uuid
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -17,9 +16,9 @@ class TreatmentReviewRecord(Base):
 
     __tablename__ = "treatment_reviews"
 
-    review_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    patient_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True)
-    clinician_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+    review_id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    patient_id = Column(Uuid(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True)
+    clinician_id = Column(Uuid(as_uuid=True), ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
     # Snapshot the reviewer name so deleting or renaming the account does not
     # erase who performed the historical review.
     clinician_name = Column(String, nullable=True)

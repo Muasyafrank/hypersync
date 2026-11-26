@@ -11,6 +11,8 @@ export const THRESHOLDS = {
   lowDiastolic: 60,
   highSystolic: 150,
   highDiastolic: 90,
+  veryHighSystolic: 180,
+  veryHighDiastolic: 110,
   elevatedSystolic: 135,
   elevatedDiastolic: 85,
 };
@@ -30,10 +32,29 @@ export function statusInfo(status) {
 
 export function classifyBP(systolic, diastolic) {
   if (!systolic || !diastolic) return null;
+  // A very-high value takes precedence over a conflicting low value. The
+  // public band remains "high" so an acute event is never labelled "Low".
+  if (isVeryHighBP(systolic, diastolic)) return 'high';
   if (systolic < THRESHOLDS.lowSystolic || diastolic < THRESHOLDS.lowDiastolic) return 'low';
   if (systolic >= THRESHOLDS.highSystolic || diastolic >= THRESHOLDS.highDiastolic) return 'high';
   if (systolic >= THRESHOLDS.elevatedSystolic || diastolic >= THRESHOLDS.elevatedDiastolic) return 'elevated';
   return 'controlled';
+}
+
+/** The public band remains "high"; safety routing uses this separate boundary. */
+export function isVeryHighBP(systolic, diastolic) {
+  if (!systolic || !diastolic) return false;
+  return systolic >= THRESHOLDS.veryHighSystolic || diastolic >= THRESHOLDS.veryHighDiastolic;
+}
+
+/** Durable urgent-care wording for a successfully saved very-high reading. */
+export const VERY_HIGH_URGENT_MESSAGE =
+  'Seek urgent medical care. If you have chest pain, a severe headache, trouble breathing, weakness, or vision changes, tell the emergency service. Do not rely on this app for advice.';
+
+/** Build the urgent message for a saved reading, or null when it is not very high. */
+export function veryHighSafetyMessage(systolic, diastolic) {
+  if (!isVeryHighBP(systolic, diastolic)) return null;
+  return `Your saved reading was ${systolic}/${diastolic} mmHg. This is very high. ${VERY_HIGH_URGENT_MESSAGE}`;
 }
 
 /** Short guidance shown alongside a live classification. */
@@ -41,7 +62,7 @@ export const STATUS_NOTES = {
   high: "This reading is high. Consider contacting your clinician if it's persistent.",
   elevated: 'This reading is a little elevated — worth keeping an eye on.',
   controlled: 'This reading is within a healthy, controlled range.',
-  low: 'This reading is on the low side. Note how you feel alongside it.',
+  low: 'This reading is on the low side. If you feel dizzy, faint or unwell, contact your clinician.',
 };
 
 /**
